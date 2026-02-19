@@ -1,0 +1,93 @@
+name: Deploy Fullstack App
+
+on:
+  push:
+    branches:
+      - main # 触发分支
+
+jobs:
+  # ========================================
+  # 任务 1：编译并部署前端 (Vue)
+  # ========================================
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 获取最新代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 安装依赖并打包
+        working-directory: ./frontend  # 🔑 关键：告诉 GitHub 进入 frontend 目录执行命令
+        run: |
+          npm install
+          npm run build
+
+      - name: 部署前端到 Nginx
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "frontend/dist/"    
+          target: "/var/www/html/metagaruta_dist/"
+          strip_components: 2         
+
+  # ========================================
+  # 任务 2：编译并部署后端 (Go)
+  # ========================================
+  deploy-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 获取最新代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.7'
+
+      - name: 编译 Go 针对 Linux 的二进制文件
+        working-directory: ./backend  # 🔑 关键：进入 backend 目录
+        env:
+          GOOS: linux
+          GOARCH: amd64
+        run: |
+          go mod tidy
+          go build -o server main.go
+
+      - name: 上传后端文件到临时目录
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "backend/server"
+          target: "/tmp"
+          strip_components: 1         
+
+      - name: 替换后端文件并重启服务
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # 遇到错误就停止执行
+            set -e  
+
+            # 停止服务
+            sudo systemctl stop metagaruta
+            
+            # 把新编译的文件覆盖过去 (注意替换 your_username)
+            # 这里的路径取决于你之前在服务器上把 Go 代码放在哪了
+            sudo mv /tmp/server /home/${{ secrets.SERVER_USER }}/metagaruta/backend/server
+            
+            # 给执行权限
+            sudo chmod +x /home/${{ secrets.SERVER_USER }}/metagaruta/backend/server
+            
+            # 重启服务
+            sudo systemctl start metagaruta

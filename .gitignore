@@ -9,7 +9,7 @@ yarn.lock
 .env.*.local
 
 # Build files
-# dist/ # Because we want to deploy the dist folder to website, we should not ignore it.
+dist/
 build/
 out/
 

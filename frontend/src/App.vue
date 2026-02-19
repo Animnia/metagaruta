@@ -65,7 +65,7 @@ const sendMessage = () => {
 
 <template>
   <div class="container">
-    <h1>Chat</h1>
+    <h1>Chat v0.1</h1>
     
     <div class="status">
       状态: <span :class="{ 'online': isConnected, 'offline': !isConnected }">

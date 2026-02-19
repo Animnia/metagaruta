@@ -26,7 +26,7 @@ func main() {
 	go handleMessages()
 
 	fmt.Println("---------------------------------------")
-	fmt.Println("Go 广播服务器已启动，监听 :3000/ws")
+	fmt.Println("Go 广播服务器已启动，监听 :3000/ws, v0.1")
 	fmt.Println("---------------------------------------")
 
 	http.ListenAndServe(":3000", nil)
