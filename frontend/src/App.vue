@@ -1,45 +1,64 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { io, type Socket } from 'socket.io-client'
+import { ref, onMounted, onUnmounted } from 'vue'
 
-// 1. 定义状态
-const message = ref('')           // 输入框的内容
-const messages = ref<string[]>([]) // 聊天记录列表
-let socket: Socket | null = null
+const message = ref('')
+const messages = ref<string[]>([])
+let socket: WebSocket | null = null
+const isConnected = ref(false)
 
-// 2. 连接服务器
 onMounted(() => {
-  // 这里的地址填你的域名，注意是 wss (安全 WebSocket)
-  // 加上 /ws 是为了配合 Nginx 的转发路径
-  socket = io('https://metagaruta.com', {
-    path: '/ws', // 关键：告诉 Socket.io 走这个路径
-    transports: ['websocket'] // 强制使用 WebSocket，不轮询
-  })
+  // 1. 计算 WebSocket URL
+  // 如果是 https 访问，就用 wss://；否则用 ws://
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const wsUrl = `${protocol}//${window.location.host}/ws`
+  
+  // 2. 建立原生 WebSocket 连接
+  console.log('正在连接到:', wsUrl)
+  socket = new WebSocket(wsUrl)
 
-  // 监听连接成功
-  socket.on('connect', () => {
+  // 3. 监听连接开启
+  socket.onopen = () => {
+    console.log('WebSocket 连接成功')
     messages.value.push('已连接到服务器！')
-  })
+    isConnected.value = true
+  }
 
-  // 监听收到消息 (后端广播回来的)
-  socket.on('message', (msg: string) => {
-    messages.value.push(`收到: ${msg}`)
-  })
+  // 4. 监听收到消息 (Go 后端发来的)
+  socket.onmessage = (event) => {
+    // 后端发来的是 Blob (二进制) 还是 Text (文本)？
+    // 通常 Gorilla 发送的是 Text，直接用 event.data
+    console.log('收到消息:', event.data)
+    messages.value.push(`收到: ${event.data}`)
+  }
 
-  // 监听错误
-  socket.on('connect_error', (err) => {
-    console.error('连接错误:', err)
-    messages.value.push('连接失败，请检查控制台')
-  })
+  // 5. 监听关闭
+  socket.onclose = (event) => {
+    console.log('连接关闭', event.code, event.reason)
+    messages.value.push('连接已断开')
+    isConnected.value = false
+  }
+
+  // 6. 监听错误
+  socket.onerror = (error) => {
+    console.error('WebSocket 错误:', error)
+    messages.value.push('发生错误，请检查控制台')
+  }
 })
 
-// 3. 发送消息函数
+onUnmounted(() => {
+  if (socket) {
+    socket.close()
+  }
+})
+
 const sendMessage = () => {
-  if (message.value.trim() && socket) {
-    // 发送给服务器
-    // 注意：这里我们约定发送的事件名叫 'chat_message'
-    socket.emit('chat_message', message.value)
-    message.value = '' // 清空输入框
+  if (message.value.trim() && socket && isConnected.value) {
+    // 原生 WebSocket 直接发送字符串
+    socket.send(message.value)
+    // 我们的后端是“广播”模式，自己发的消息也会被广播回来
+    // 所以这里其实不需要手动 push 到 messages 数组，
+    // 等 onmessage 收到回音再显示会更准确（确认服务器收到了）
+    message.value = ''
   }
 }
 </script>
@@ -48,6 +67,12 @@ const sendMessage = () => {
   <div class="container">
     <h1>Chat</h1>
     
+    <div class="status">
+      状态: <span :class="{ 'online': isConnected, 'offline': !isConnected }">
+        {{ isConnected ? '在线' : '离线' }}
+      </span>
+    </div>
+
     <div class="chat-box">
       <div v-for="(msg, index) in messages" :key="index" class="message-item">
         {{ msg }}
@@ -58,16 +83,16 @@ const sendMessage = () => {
       <input 
         v-model="message" 
         @keyup.enter="sendMessage" 
-        placeholder="请输入文本..." 
+        placeholder="输入内容..." 
         type="text"
+        :disabled="!isConnected"
       />
-      <button @click="sendMessage">发送</button>
+      <button @click="sendMessage" :disabled="!isConnected">发送</button>
     </div>
   </div>
 </template>
 
 <style scoped>
-/* 简单写点样式让它不那么丑 */
 .container { max-width: 600px; margin: 0 auto; padding: 20px; font-family: sans-serif; }
 .chat-box { 
   border: 1px solid #ccc; 
@@ -81,4 +106,8 @@ const sendMessage = () => {
 .input-area { display: flex; gap: 10px; }
 input { flex: 1; padding: 8px; }
 button { padding: 8px 16px; cursor: pointer; background: #42b883; color: white; border: none; }
+button:disabled { background: #ccc; }
+.status { margin-bottom: 10px; font-weight: bold; }
+.online { color: green; }
+.offline { color: red; }
 </style>
