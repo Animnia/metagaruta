@@ -200,6 +200,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				room = &Room{
 					ID:      roomID,
 					Players: make(map[string]*Player),
+					State:   "waiting",
 				}
 				rooms[roomID] = room
 			}
