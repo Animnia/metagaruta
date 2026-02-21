@@ -15,10 +15,10 @@ import (
 
 // Player 代表一个玩家
 type Player struct {
-	ID    string
-	Name  string
-	Score int
-	Conn  *websocket.Conn `json:"-"` // json:"-" 表示在转换成 JSON 时忽略这个字段，因为连接对象不能被序列化
+	ID    string          `json:"id"`    // 强制转为小写
+	Name  string          `json:"name"`  // 强制转为小写
+	Score int             `json:"score"` // 强制转为小写
+	Conn  *websocket.Conn `json:"-"`
 }
 
 // Room 代表一个游戏房间
@@ -68,37 +68,46 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("WebSocket 升级失败:", err)
 		return
 	}
-	defer conn.Close()
 
 	var currentPlayer *Player
 	var currentRoom *Room
+
+	// 🌟 核心修复 1：利用 defer 确保无论什么情况断开，都把玩家移出房间
+	defer func() {
+		if currentRoom != nil && currentPlayer != nil {
+			// 加锁，安全地从 map 中删除自己
+			currentRoom.Mutex.Lock()
+			delete(currentRoom.Players, currentPlayer.ID)
+			currentRoom.Mutex.Unlock()
+
+			fmt.Printf("玩家 [%s] 离开了房间\n", currentPlayer.Name)
+			// 通知房间里剩下的人，更新列表
+			broadcastRoomState(currentRoom)
+		}
+		conn.Close()
+	}()
 
 	// 不断读取前端发来的消息
 	for {
 		_, msgBytes, err := conn.ReadMessage()
 		if err != nil {
-			fmt.Println("玩家断开连接")
-			// TODO: 处理玩家断开连接的逻辑 (从房间中移除)
-			break
+			fmt.Println("玩家断开连接/网络异常")
+			break // 退出循环，自动触发上面的 defer 清理逻辑
 		}
 
 		// 解析 JSON
 		var msg WsMessage
 		if err := json.Unmarshal(msgBytes, &msg); err != nil {
-			fmt.Println("解析 JSON 失败:", err)
 			continue
 		}
 
-		// 根据 type 处理不同的动作
 		switch msg.Type {
 
 		case "join_room":
-			// 玩家请求加入房间
 			roomID := msg.Payload["roomId"].(string)
 			playerName := msg.Payload["playerName"].(string)
-			playerID := msg.Payload["playerId"].(string) // 前端生成一个唯一ID发过来
+			playerID := msg.Payload["playerId"].(string)
 
-			// 寻找或创建房间 (需要加锁)
 			globalMutex.Lock()
 			room, exists := rooms[roomID]
 			if !exists {
@@ -107,16 +116,21 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 					Players: make(map[string]*Player),
 				}
 				rooms[roomID] = room
-				fmt.Println("创建了新房间:", roomID)
 			}
 			globalMutex.Unlock()
 
-			// 将玩家加入房间
 			room.Mutex.Lock()
 			if len(room.Players) >= 4 {
-				// 房间满了，拒绝加入
-				// TODO: 发送拒绝消息给前端
-				room.Mutex.Unlock()
+				room.Mutex.Unlock() // 记得解锁
+				// 🌟 核心修复 2：房间满了，给前端发个报错提示，而不是默默无视
+				errMsg := WsMessage{
+					Type: "error",
+					Payload: map[string]interface{}{
+						"message": "房间人数已满 (最多4人)",
+					},
+				}
+				msgBytes, _ := json.Marshal(errMsg)
+				conn.WriteMessage(websocket.TextMessage, msgBytes)
 				continue
 			}
 
@@ -127,12 +141,9 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			room.Mutex.Unlock()
 
 			fmt.Printf("玩家 [%s] 加入了房间 [%s]\n", playerName, roomID)
-
-			// 告诉房间里的所有人：有新玩家加入了！
 			broadcastRoomState(room)
 
 		case "chat":
-			// 收到聊天消息，广播给同房间的人
 			if currentRoom != nil && currentPlayer != nil {
 				text := msg.Payload["text"].(string)
 				chatMsg := WsMessage{

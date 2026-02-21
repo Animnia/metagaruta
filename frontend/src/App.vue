@@ -59,6 +59,10 @@ onMounted(() => {
       // 收到聊天消息
       chatLogs.value.push(`${data.payload.sender}: ${data.payload.text}`)
     }
+    else if (data.type === 'error') {
+      alert(data.payload.message) // 弹窗提示房间已满
+      chatLogs.value.push(`系统: ${data.payload.message}`)
+    }
   }
 
   socket.onclose = () => { isConnected.value = false }
