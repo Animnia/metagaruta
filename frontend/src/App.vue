@@ -1,18 +1,16 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 
 interface Player { id: string, name: string, score: number }
 interface Card { id: string, songName: string, isMatched: boolean }
 
+// 模拟玩家数据
+const myPlayerId = 'user_' + Math.floor(Math.random() * 1000)
+const myPlayerName = '玩家' + Math.floor(Math.random() * 10)
 const roomId = ref('8848')
 const currentRound = ref(1)
 
-const players = ref<Player[]>([
-  { id: 'p1', name: '玩家A', score: 10 },
-  { id: 'p2', name: '玩家B', score: 5 },
-  { id: 'p3', name: '玩家C', score: -5 },
-  { id: 'p4', name: '玩家D', score: 0 }
-])
+const players = ref<Player[]>([]) // 初始为空，等后端发过来
 
 const cards = ref<Card[]>(
   Array.from({ length: 16 }, (_, i) => ({
@@ -24,6 +22,47 @@ const cards = ref<Card[]>(
 
 const chatMessage = ref('')
 const chatLogs = ref<string[]>(['系统: 欢迎来到歌牌房间！'])
+let socket: WebSocket | null = null
+const isConnected = ref(false)
+
+onMounted(() => {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const wsUrl = `${protocol}//${window.location.host}/ws`
+  socket = new WebSocket(wsUrl)
+
+  socket.onopen = () => {
+    isConnected.value = true
+    
+    // 🌟 1. 连接成功后，第一件事是发 JSON 请求加入房间！
+    if (socket) {
+      socket.send(JSON.stringify({
+        type: 'join_room',
+        payload: {
+          roomId: roomId.value,
+          playerName: myPlayerName,
+          playerId: myPlayerId
+        }
+      }))
+    }
+  }
+
+  socket.onmessage = (event) => {
+    // 🌟 2. 接收后端的 JSON 数据
+    const data = JSON.parse(event.data)
+
+    if (data.type === 'room_state_update') {
+      // 后端发来了最新的房间玩家列表！
+      players.value = data.payload.players
+      console.log('房间状态更新:', players.value)
+    } 
+    else if (data.type === 'chat_receive') {
+      // 收到聊天消息
+      chatLogs.value.push(`${data.payload.sender}: ${data.payload.text}`)
+    }
+  }
+
+  socket.onclose = () => { isConnected.value = false }
+})
 
 const handleCardClick = (card: Card) => {
   if (card.isMatched) return
@@ -35,8 +74,12 @@ const handleNoSongClick = () => {
 }
 
 const sendChat = () => {
-  if (chatMessage.value.trim()) {
-    chatLogs.value.push(`我: ${chatMessage.value}`)
+  if (chatMessage.value.trim() && socket && isConnected.value) {
+    // 3. 发送 JSON 格式的聊天
+    socket.send(JSON.stringify({
+      type: 'chat',
+      payload: { text: chatMessage.value }
+    }))
     chatMessage.value = ''
   }
 }
