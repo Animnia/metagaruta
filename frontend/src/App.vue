@@ -1,8 +1,18 @@
 <script setup lang="ts">
 import { ref, onUnmounted } from 'vue'
 
-interface Player { id: string, name: string, score: number }
-interface Card { id: string, songName: string, isMatched: boolean }
+interface Player { 
+  id: string, 
+  name: string, 
+  score: number
+
+}
+interface Card { 
+  id: string, 
+  titleOriginal: string, 
+  titleTranslation: string, 
+  isMatched: boolean 
+}
 
 // ==========================================
 // 1. 页面路由与表单状态
@@ -21,13 +31,9 @@ const myPlayerId = 'user_' + Math.floor(Math.random() * 10000)
 // 2. 游戏内状态
 // ==========================================
 const players = ref<Player[]>([])
-const cards = ref<Card[]>(
-  Array.from({ length: 16 }, (_, i) => ({
-    id: `song_${i}`,
-    songName: `测试歌曲名称 ${i + 1}`,
-    isMatched: false
-  }))
-)
+// 初始状态下场上没有牌
+const cards = ref<Card[]>([]) 
+const gameState = ref('waiting') // 控制显示“开始按钮”还是“进行中”
 const currentRound = ref(1)
 const chatMessage = ref('')
 const chatLogs = ref<string[]>(['系统: 欢迎来到歌牌房间！'])
@@ -72,6 +78,13 @@ const joinGame = () => {
     else if (data.type === 'chat_receive') {
       chatLogs.value.push(`${data.payload.sender}: ${data.payload.text}`)
     }
+    else if (data.type === 'game_started') {
+      // 后端发牌了！
+      cards.value = data.payload.cards
+      currentRound.value = data.payload.round
+      gameState.value = 'playing'
+      chatLogs.value.push('系统: 游戏开始！生成了 16 张歌牌。')
+    }
     else if (data.type === 'error') {
       alert(data.payload.message)
       // 如果房间满了被拒绝，退回到首页
@@ -87,6 +100,12 @@ const createGame = () => {
   alert('测试阶段：请直接输入房间号加入已有房间！')
 }
 
+const startGame = () => {
+  if (socket && isConnected.value) {
+    socket.send(JSON.stringify({ type: 'start_game', payload: {} }))
+  }
+}
+
 // ==========================================
 // 4. 游戏内交互方法
 // ==========================================
@@ -96,7 +115,7 @@ onUnmounted(() => {
 
 const handleCardClick = (card: Card) => {
   if (card.isMatched) return
-  console.log(`你点击了歌牌: ${card.songName}`)
+  console.log(`你点击了歌牌: ${card.titleOriginal}`)
 }
 
 const handleNoSongClick = () => {
@@ -157,6 +176,9 @@ const sendChat = () => {
           <div class="audio-status">🔊 等待开始...</div>
           <div class="round-display">第 {{ currentRound }} 局</div>
           <div class="actions">
+            <button v-if="gameState === 'waiting'" class="start-btn" @click="startGame">
+              🚀 开始游戏
+            </button>
             <button class="icon-btn">ℹ️</button>
             <button class="icon-btn">⚙️</button>
           </div>
@@ -164,7 +186,7 @@ const sendChat = () => {
 
         <div class="karuta-board">
           <div v-for="card in cards" :key="card.id" class="karuta-card" :class="{ 'card-hidden': card.isMatched }" @click="handleCardClick(card)">
-            <span class="card-text">{{ card.songName }}</span>
+            <span class="card-text">{{ card.titleOriginal }}</span>
           </div>
         </div>
 
@@ -280,6 +302,7 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 .main-area { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .top-bar { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 2px solid #000; font-weight: bold; font-size: 1.1rem; }
 .actions { display: flex; gap: 10px; }
+.start-btn { background: #42b883; color: white; border: 2px solid #000; padding: 5px 10px; font-weight: bold; cursor: pointer;}
 .icon-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; }
 .karuta-board { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, auto); grid-template-rows: repeat(4, minmax(0, 1fr)); justify-content: center; gap: 15px 30px; padding: 15px; background-color: #f4f4f4; }
 .karuta-card { aspect-ratio: 2 / 3; height: 100%; border: 3px solid #000; background-color: #fff; border-radius: 4px; display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: 2px 2px 0px #000; transition: transform 0.1s, background-color 0.1s; overflow: hidden; }
