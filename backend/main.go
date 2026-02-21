@@ -94,11 +94,11 @@ func main() {
 func loadSongs() {
 	file, err := os.ReadFile("data/songs.json") // 确保你的文件放在这个相对路径
 	if err != nil {
-		fmt.Println("⚠️ 警告: 无法读取 data/songs.json，请检查路径！", err)
+		fmt.Println("警告: 无法读取 data/songs.json，请检查路径！", err)
 		return
 	}
 	json.Unmarshal(file, &globalSongs)
-	fmt.Printf("✅ 成功加载 %d 首歌曲到全局题库\n", len(globalSongs))
+	fmt.Printf("成功加载 %d 首歌曲到全局题库\n", len(globalSongs))
 }
 
 // 洗牌并生成 16 张歌牌
