@@ -229,6 +229,18 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 			fmt.Printf("玩家 [%s] 加入了房间 [%s]\n", playerName, roomID)
 			broadcastRoomState(room)
+			// 如果新玩家中途加入时游戏已经开始，单独向他同步牌局状态
+			if room.State == "playing" {
+				syncMsg := WsMessage{
+					Type: "game_started",
+					Payload: map[string]interface{}{
+						"cards": room.BoardCards,
+						"round": room.CurrentRound,
+					},
+				}
+				msgBytes, _ := json.Marshal(syncMsg)
+				conn.WriteMessage(websocket.TextMessage, msgBytes) // 只发给当前这个新连入的连接
+			}
 
 		case "chat":
 			if currentRoom != nil && currentPlayer != nil {
