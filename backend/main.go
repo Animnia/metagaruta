@@ -86,9 +86,9 @@ var (
 // ==========================================
 
 func main() {
-	loadSongs() // 👈 新增这行，载入题库
+	loadSongs() // 载入题库
 	http.HandleFunc("/ws", handleConnections)
-	http.HandleFunc("/api/audio", handleAudioProxy) // 🌟 挂载音频接口
+	http.HandleFunc("/api/audio", handleAudioProxy) // 挂载音频接口
 	fmt.Println("---------------------------------------")
 	fmt.Println("歌牌游戏裁判服务器已启动 :3000/ws")
 	fmt.Println("---------------------------------------")
