@@ -14,6 +14,8 @@ interface Card {
   isMatched: boolean 
 }
 
+const audioPlayer = ref<HTMLAudioElement | null>(null)
+
 // ==========================================
 // 1. 页面路由与表单状态
 // ==========================================
@@ -85,6 +87,42 @@ const joinGame = () => {
       gameState.value = 'playing'
       chatLogs.value.push('系统: 游戏开始！生成了 16 张歌牌。')
     }
+    // 收到裁判指令：静音加载音频，设置进度，但不准播放
+    else if (data.type === 'prepare_round') {
+      currentRound.value = data.payload.round
+      const startTime = data.payload.startTime
+      chatLogs.value.push(`系统: 第 ${currentRound.value} 局音频缓冲中...`)
+      
+      // 🌟 核心防作弊与防缓存机制：带上当前时间戳 t=...，强迫浏览器重新请求
+      const audioUrl = `/api/audio?roomId=${inputRoomId.value}&t=${new Date().getTime()}`
+      
+      if (audioPlayer.value) {
+        audioPlayer.value.src = audioUrl
+        
+        // 监听浏览器“可以流畅播放”事件
+        audioPlayer.value.oncanplay = () => {
+          // 清空事件，防止因为网络波动重复触发
+          audioPlayer.value!.oncanplay = null 
+          
+          // 跳转到随机生成的裁切时间
+          audioPlayer.value!.currentTime = startTime
+          
+          // 举手告诉裁判：我缓冲完毕了！
+          socket?.send(JSON.stringify({ type: 'client_ready', payload: {} }))
+        }
+      }
+    }
+    
+    // 收到裁判发令枪：所有人同时开始播放！
+    else if (data.type === 'play_round') {
+      chatLogs.value.push(`系统: 播放开始！仔细听...`)
+      if (audioPlayer.value) {
+        audioPlayer.value.play().catch(e => {
+          console.error('自动播放被浏览器拦截:', e)
+          chatLogs.value.push('系统: 浏览器限制自动播放，请点击网页任意处恢复。')
+        })
+      }
+    }
     else if (data.type === 'error') {
       alert(data.payload.message)
       // 如果房间满了被拒绝，退回到首页
@@ -134,6 +172,7 @@ const sendChat = () => {
 </script>
 
 <template>
+  <audio ref="audioPlayer" preload="auto"></audio>
   <div v-if="currentView === 'home'" class="home-wrapper">
     <div class="login-box">
       <h1 class="game-title">🧠 智力竞技歌牌</h1>

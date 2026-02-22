@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -22,6 +23,7 @@ type Player struct {
 	Name        string          `json:"name"`
 	Score       int             `json:"score"`
 	HasAnswered bool            `json:"hasAnswered"` // 本局是否已点过牌
+	IsReady     bool            `json:"-"`
 	Conn        *websocket.Conn `json:"-"`
 }
 
@@ -46,11 +48,13 @@ type Room struct {
 	Mutex   sync.Mutex
 
 	// --- 新增的游戏状态 ---
-	State        string `json:"state"` // "waiting"(等待中), "playing"(游戏中)
-	CurrentRound int    `json:"currentRound"`
-	SongPool     []Song `json:"-"` // 本局抽出的 25 首题库 (不需要发给前端，防作弊)
-	BoardCards   []Card `json:"-"` // 场上的 16 张歌牌
-	CurrentSong  *Song  `json:"-"` // 当前正在播放的歌
+	State        string        `json:"state"` // "waiting"(等待中), "playing"(游戏中)
+	CurrentRound int           `json:"currentRound"`
+	SongPool     []Song        `json:"-"` // 本局抽出的 25 首题库 (不需要发给前端，防作弊)
+	BoardCards   []Card        `json:"-"` // 场上的 16 张歌牌
+	CurrentSong  *Song         `json:"-"` // 当前正在播放的歌
+	RoundState   string        `json:"-"` // 新增：记录回合状态 ("preparing" 或 "playing")
+	TimerCancel  chan struct{} `json:"-"` // 新增：用于打断 5 秒强制开局的定时器
 }
 
 // WsMessage 是前后端通信的统一 JSON 格式
@@ -84,10 +88,35 @@ var (
 func main() {
 	loadSongs() // 👈 新增这行，载入题库
 	http.HandleFunc("/ws", handleConnections)
+	http.HandleFunc("/api/audio", handleAudioProxy) // 🌟 挂载音频接口
 	fmt.Println("---------------------------------------")
 	fmt.Println("歌牌游戏裁判服务器已启动 :3000/ws")
 	fmt.Println("---------------------------------------")
 	http.ListenAndServe(":3000", nil)
+}
+
+// 处理音频请求 (防 F12 作弊接口)
+func handleAudioProxy(w http.ResponseWriter, r *http.Request) {
+	roomID := r.URL.Query().Get("roomId")
+
+	globalMutex.Lock()
+	room, exists := rooms[roomID]
+	globalMutex.Unlock()
+
+	// 如果房间不存在，或者当前回合还没有选定歌曲，拒绝请求
+	if !exists || room.CurrentSong == nil {
+		http.Error(w, "找不到歌曲或游戏未开始", http.StatusNotFound)
+		return
+	}
+
+	// 构造本地音频文件路径 (例如: audio/3396b1.mp3)
+	audioPath := filepath.Join("audio", room.CurrentSong.ID+".m4a")
+
+	// 设置 Header，严禁浏览器缓存这首歌！防止玩家通过缓存提前知道答案
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+
+	// 将 MP3 文件流直接返回给前端
+	http.ServeFile(w, r, audioPath)
 }
 
 // 启动时加载题库
@@ -146,6 +175,82 @@ func initGame(room *Room) {
 	})
 
 	fmt.Printf("房间 [%s] 游戏初始化完成，生成 %d 张牌\n", room.ID, cardSize)
+}
+
+// 阶段一：开始新一回合，发送“准备”指令
+func startRound(room *Room) {
+	room.RoundState = "preparing"
+
+	// 1. 重置所有玩家的答题和准备状态
+	for _, p := range room.Players {
+		p.HasAnswered = false
+		p.IsReady = false
+	}
+
+	// 2. 检查是否放完了 25 首歌
+	if room.CurrentRound-1 >= len(room.SongPool) {
+		fmt.Printf("房间 [%s] 游戏结束\n", room.ID)
+		// TODO: 游戏结束结算逻辑
+		return
+	}
+
+	// 3. 选定本回合歌曲并计算随机切入时间
+	targetSong := room.SongPool[room.CurrentRound-1]
+	room.CurrentSong = &targetSong
+
+	maxStart := targetSong.Duration * 3 / 4
+	if maxStart <= 0 {
+		maxStart = 1
+	}
+	startTime := rand.Intn(maxStart)
+
+	fmt.Printf("房间 [%s] 准备第 %d 局，等待缓冲...\n", room.ID, room.CurrentRound)
+
+	// 4. 发送 prepare_round 指令 (只告诉前端第几局、从哪秒开始，不给歌名！)
+	prepMsg := WsMessage{
+		Type: "prepare_round",
+		Payload: map[string]interface{}{
+			"round":     room.CurrentRound,
+			"startTime": startTime,
+		},
+	}
+	broadcastToRoom(room, prepMsg)
+
+	// 5. 开启 5 秒防卡死倒计时。5秒后即使有人没加载完也强制开始
+	room.TimerCancel = make(chan struct{})
+	go func(r *Room, roundNum int, cancelCh chan struct{}) {
+		select {
+		case <-time.After(5 * time.Second): // 5秒超时
+			forcePlayRound(r, roundNum)
+		case <-cancelCh: // 所有人都提前准备好了，通道被关闭，打断倒计时
+			return
+		}
+	}(room, room.CurrentRound, room.TimerCancel)
+}
+
+// 阶段二：真正下达播放指令
+func forcePlayRound(room *Room, roundNum int) {
+	room.Mutex.Lock()
+	defer room.Mutex.Unlock()
+
+	// 防止超时和所有人准备好同时触发，确保只执行一次
+	if room.RoundState != "preparing" || room.CurrentRound != roundNum {
+		return
+	}
+	room.RoundState = "playing"
+
+	fmt.Printf("房间 [%s] 第 %d 局正式播放！\n", room.ID, room.CurrentRound)
+
+	playMsg := WsMessage{
+		Type:    "play_round",
+		Payload: map[string]interface{}{},
+	}
+
+	// 因为当前已经在锁里面了，不能调用 broadcastToRoom (会死锁)，手动遍历发送
+	msgBytes, _ := json.Marshal(playMsg)
+	for _, p := range room.Players {
+		p.Conn.WriteMessage(websocket.TextMessage, msgBytes)
+	}
 }
 
 func handleConnections(w http.ResponseWriter, r *http.Request) {
@@ -269,6 +374,38 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 					},
 				}
 				broadcastToRoom(currentRoom, startMsg)
+
+				// 🌟 发牌完毕后，服务器主动发起第一回合的“准备播放”
+				currentRoom.Mutex.Lock()
+				startRound(currentRoom)
+				currentRoom.Mutex.Unlock()
+			}
+
+		case "client_ready": // 🌟 新增：接收前端缓冲完毕的信号
+			if currentRoom != nil && currentRoom.RoundState == "preparing" {
+				currentRoom.Mutex.Lock()
+				currentPlayer.IsReady = true
+
+				// 检查房间里是不是所有人都 IsReady 了
+				allReady := true
+				for _, p := range currentRoom.Players {
+					if !p.IsReady {
+						allReady = false
+						break
+					}
+				}
+
+				// 如果都准备好了，立刻打断定时器并播放
+				if allReady {
+					if currentRoom.TimerCancel != nil {
+						close(currentRoom.TimerCancel)
+						currentRoom.TimerCancel = nil
+					}
+					currentRoom.Mutex.Unlock() // 先解锁，再调用 forcePlayRound
+					forcePlayRound(currentRoom, currentRoom.CurrentRound)
+				} else {
+					currentRoom.Mutex.Unlock()
+				}
 			}
 		}
 	}
