@@ -93,7 +93,7 @@ const joinGame = () => {
       const startTime = data.payload.startTime
       chatLogs.value.push(`系统: 第 ${currentRound.value} 局音频缓冲中...`)
       
-      // 🌟 核心防作弊与防缓存机制：带上当前时间戳 t=...，强迫浏览器重新请求
+      // 核心防作弊与防缓存机制：带上当前时间戳 t=...，强迫浏览器重新请求
       const audioUrl = `/api/audio?roomId=${inputRoomId.value}&t=${new Date().getTime()}`
       
       if (audioPlayer.value) {
