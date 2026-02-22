@@ -109,11 +109,20 @@ func handleAudioProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 构造本地音频文件路径 (例如: audio/3396b1.mp3)
+	// 构造本地音频文件路径
 	audioPath := filepath.Join("audio", room.CurrentSong.ID+".m4a")
+
+	if _, err := os.Stat(audioPath); os.IsNotExist(err) {
+		fmt.Printf("严重错误: 找不到音频文件: %s\n", audioPath)
+		http.Error(w, "音频文件不存在", http.StatusNotFound)
+		return
+	}
+
+	fmt.Printf("正在发送音频文件: %s\n", audioPath)
 
 	// 设置 Header，严禁浏览器缓存这首歌！防止玩家通过缓存提前知道答案
 	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+	w.Header().Set("Content-Type", "audio/mp4")
 
 	// 将 MP3 文件流直接返回给前端
 	http.ServeFile(w, r, audioPath)

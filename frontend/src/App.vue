@@ -118,8 +118,8 @@ const joinGame = () => {
       chatLogs.value.push(`系统: 播放开始！仔细听...`)
       if (audioPlayer.value) {
         audioPlayer.value.play().catch(e => {
-          console.error('自动播放被浏览器拦截:', e)
-          chatLogs.value.push('系统: 浏览器限制自动播放，请点击网页任意处恢复。')
+          console.error('音频播放失败，真实原因:', e) 
+          chatLogs.value.push(`系统: 播放异常 (${e.name})`)
         })
       }
     }
@@ -140,6 +140,17 @@ const createGame = () => {
 
 const startGame = () => {
   if (socket && isConnected.value) {
+    // 利用真实的点击事件，强行拿到浏览器的播放授权
+    if (audioPlayer.value) {
+      audioPlayer.value.volume = 0; // 设为静音
+      audioPlayer.value.play().then(() => {
+        audioPlayer.value!.pause(); // 拿到权限后立刻暂停
+        audioPlayer.value!.volume = 1; // 恢复正常音量
+        console.log("✅ 浏览器音频权限解锁成功！");
+      }).catch(e => {
+        console.warn("⚠️ 音频预解锁失败:", e);
+      });
+    }
     socket.send(JSON.stringify({ type: 'start_game', payload: {} }))
   }
 }
