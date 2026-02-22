@@ -43,6 +43,8 @@ const chatLogs = ref<string[]>(['系统: 欢迎来到歌牌房间！'])
 let socket: WebSocket | null = null
 const isConnected = ref(false)
 
+const hasAnswered = ref(false)
+
 // ==========================================
 // 3. 核心方法：加入房间
 // ==========================================
@@ -90,6 +92,7 @@ const joinGame = () => {
     // 收到裁判指令：静音加载音频，设置进度，但不准播放
     else if (data.type === 'prepare_round') {
       currentRound.value = data.payload.round
+      hasAnswered.value = false // 新回合开始，恢复答题资格
       const startTime = data.payload.startTime
       chatLogs.value.push(`系统: 第 ${currentRound.value} 局音频缓冲中...`)
       
@@ -123,6 +126,27 @@ const joinGame = () => {
         })
       }
     }
+
+    else if (data.type === 'wrong_answer') {
+      hasAnswered.value = true // 答错了，剥夺本局继续点击的资格
+      chatLogs.value.push('系统: ❌ 回答错误，扣除 5 分，本局无法继续操作！')
+    }
+
+    else if (data.type === 'round_end') {
+      gameState.value = 'ended'
+      hasAnswered.value = true
+      cards.value = data.payload.cards // 刷新牌面，被答对的牌会自动消失
+      
+      // 停止播放音乐
+      if (audioPlayer.value) {
+        audioPlayer.value.pause()
+      }
+      
+      chatLogs.value.push(`🏆 ${data.payload.reason}`)
+      chatLogs.value.push(`🎵 正确答案是: ${data.payload.correctSong}`)
+      chatLogs.value.push('系统: 4 秒后自动开启下一局...')
+    }
+
     else if (data.type === 'error') {
       alert(data.payload.message)
       // 如果房间满了被拒绝，退回到首页
@@ -163,12 +187,26 @@ onUnmounted(() => {
 })
 
 const handleCardClick = (card: Card) => {
-  if (card.isMatched) return
-  console.log(`你点击了歌牌: ${card.titleOriginal}`)
+  // 如果牌没了、游戏没在进行、或者自己已经答过题了，就不准点
+  if (card.isMatched || gameState.value !== 'playing' || hasAnswered.value) return
+  
+  if (socket && isConnected.value) {
+    socket.send(JSON.stringify({
+      type: 'buzz',
+      payload: { cardId: card.id }
+    }))
+  }
 }
 
 const handleNoSongClick = () => {
-  console.log('你点击了: 没有这首歌')
+  if (gameState.value !== 'playing' || hasAnswered.value) return
+
+  if (socket && isConnected.value) {
+    socket.send(JSON.stringify({
+      type: 'no_song',
+      payload: {}
+    }))
+  }
 }
 
 const sendChat = () => {
@@ -216,7 +254,7 @@ const sendChat = () => {
           </div>
         </div>
         <div class="sidebar-bottom">
-          <button class="no-song-btn" @click="handleNoSongClick">没有这首歌</button>
+          <button class="no-song-btn" :class="{ 'disabled': hasAnswered || gameState !== 'playing' }" @click="handleNoSongClick">没有这首歌</button>
           <div class="room-info">房间号: <strong>{{ inputRoomId }}</strong></div>
         </div>
       </aside>
@@ -348,6 +386,7 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 .sidebar-bottom { border-top: 4px solid #000; display: flex; flex-direction: column; background-color: #f9f9f9; }
 .no-song-btn { margin: 15px; padding: 12px; border: 2px solid #000; background: #ff5252; color: white; font-weight: bold; font-size: 1rem; cursor: pointer; border-radius: 4px; box-shadow: 2px 2px 0px #000; transition: all 0.1s; }
 .no-song-btn:active { transform: translate(2px, 2px); box-shadow: 0px 0px 0px #000; }
+.no-song-btn.disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
 .room-info { border-top: 2px dashed #000; padding: 10px; text-align: center; font-weight: bold; background: #fff; }
 .main-area { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .top-bar { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 2px solid #000; font-weight: bold; font-size: 1.1rem; }
