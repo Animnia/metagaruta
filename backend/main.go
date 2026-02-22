@@ -179,6 +179,10 @@ func initGame(room *Room) {
 
 // 阶段一：开始新一回合，发送“准备”指令
 func startRound(room *Room) {
+	// 🌟 修复 1：在这里统一加上锁
+	room.Mutex.Lock()
+	defer room.Mutex.Unlock()
+
 	room.RoundState = "preparing"
 
 	// 1. 重置所有玩家的答题和准备状态
@@ -206,7 +210,7 @@ func startRound(room *Room) {
 
 	fmt.Printf("房间 [%s] 准备第 %d 局，等待缓冲...\n", room.ID, room.CurrentRound)
 
-	// 4. 发送 prepare_round 指令 (只告诉前端第几局、从哪秒开始，不给歌名！)
+	// 4. 发送 prepare_round 指令
 	prepMsg := WsMessage{
 		Type: "prepare_round",
 		Payload: map[string]interface{}{
@@ -214,15 +218,21 @@ func startRound(room *Room) {
 			"startTime": startTime,
 		},
 	}
-	broadcastToRoom(room, prepMsg)
 
-	// 5. 开启 5 秒防卡死倒计时。5秒后即使有人没加载完也强制开始
+	// 🌟 修复 2：因为当前已经在锁内部，绝对不能调用 broadcastToRoom（会再次造成死锁）
+	// 我们像 forcePlayRound 那样，手动遍历发送
+	msgBytes, _ := json.Marshal(prepMsg)
+	for _, p := range room.Players {
+		p.Conn.WriteMessage(websocket.TextMessage, msgBytes)
+	}
+
+	// 5. 开启 5 秒防卡死倒计时。
 	room.TimerCancel = make(chan struct{})
 	go func(r *Room, roundNum int, cancelCh chan struct{}) {
 		select {
 		case <-time.After(5 * time.Second): // 5秒超时
 			forcePlayRound(r, roundNum)
-		case <-cancelCh: // 所有人都提前准备好了，通道被关闭，打断倒计时
+		case <-cancelCh: // 所有人都提前准备好了
 			return
 		}
 	}(room, room.CurrentRound, room.TimerCancel)
@@ -376,9 +386,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				broadcastToRoom(currentRoom, startMsg)
 
 				// 🌟 发牌完毕后，服务器主动发起第一回合的“准备播放”
-				currentRoom.Mutex.Lock()
 				startRound(currentRoom)
-				currentRoom.Mutex.Unlock()
 			}
 
 		case "client_ready": // 🌟 新增：接收前端缓冲完毕的信号
