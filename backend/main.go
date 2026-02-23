@@ -354,6 +354,15 @@ func endRound(room *Room, reason string, removeSong bool) {
 		}
 	}
 
+	// 检查场上 16 张牌是否已经全部被消除
+	matchedCount := 0
+	for _, c := range room.BoardCards {
+		if c.IsMatched {
+			matchedCount++
+		}
+	}
+	isAllMatched := (matchedCount >= 16)
+
 	fmt.Printf("房间 [%s] 第 %d 局结束。原因: %s\n", room.ID, room.CurrentRound, reason)
 
 	// 2. 告诉所有人本局结束，公布正确答案
@@ -386,13 +395,18 @@ func endRound(room *Room, reason string, removeSong bool) {
 	}
 
 	// 4. 开启一个独立的协程，等待 4 秒后自动开启下一局
-	go func(r *Room) {
+	go func(r *Room, isGameOver bool) {
 		time.Sleep(4 * time.Second)
-		r.Mutex.Lock()
-		r.CurrentRound++
-		r.Mutex.Unlock()
-		startRound(r)
-	}(room)
+		if isGameOver {
+			overMsg := WsMessage{Type: "game_over", Payload: map[string]interface{}{}}
+			broadcastToRoom(r, overMsg)
+		} else {
+			r.Mutex.Lock()
+			r.CurrentRound++
+			r.Mutex.Unlock()
+			startRound(r)
+		}
+	}(room, isAllMatched)
 }
 
 func handleConnections(w http.ResponseWriter, r *http.Request) {

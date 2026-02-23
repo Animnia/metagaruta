@@ -52,6 +52,11 @@ let socket: WebSocket | null = null
 const isConnected = ref(false)
 const hasAnswered = ref(false)
 
+// 控制弹窗和设置的变量
+const showRules = ref(false)
+const showSettings = ref(false)
+const displayMode = ref('original')
+
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null // 心跳定时器
 
 // 监听聊天记录变化，自动滚动到底部
@@ -193,7 +198,17 @@ const joinGame = () => {
       
       chatLogs.value.push(`🏆 ${data.payload.reason}`)
       chatLogs.value.push(`🎵 正确答案是: ${data.payload.correctSong}`)
-      chatLogs.value.push('系统: 4 秒后自动开启下一局...')
+
+      let countdown = 4
+      chatLogs.value.push(`系统: ${countdown} 秒后自动开启下一局...`)
+      const cdTimer = setInterval(() => {
+        countdown--
+        if (countdown > 0) {
+          chatLogs.value.push(`系统: ${countdown} 秒后自动开启下一局...`)
+        } else {
+          clearInterval(cdTimer)
+        }
+      }, 1000)
     }
 
     else if (data.type === 'game_over') {
@@ -328,14 +343,14 @@ const sendChat = () => {
             <button v-if="gameState === 'waiting'" class="start-btn" @click="startGame">
               🚀 开始游戏
             </button>
-            <button class="icon-btn">ℹ️</button>
-            <button class="icon-btn">⚙️</button>
+            <button class="icon-btn" @click="showRules = true">ℹ️</button>
+            <button class="icon-btn" @click="showSettings = true">⚙️</button>
           </div>
         </header>
 
         <div class="karuta-board">
           <div v-for="card in cards" :key="card.id" class="karuta-card" :class="{ 'card-hidden': card.isMatched }" @click="handleCardClick(card)">
-            <span class="card-text">{{ card.titleOriginal }}</span>
+            <span class="card-text">{{ displayMode === 'original' ? card.titleOriginal : card.titleTranslation }}</span>
           </div>
         </div>
 
@@ -349,6 +364,30 @@ const sendChat = () => {
         </footer>
       </main>
     </div>
+    <div v-if="showRules" class="modal-overlay" @click.self="showRules = false">
+        <div class="modal-box">
+          <h2>ℹ️ 游戏玩法</h2>
+          <p>1. 仔细聆听播放的音乐片段。</p>
+          <p>2. 在 16 张歌牌中寻找对应的歌曲，最先点击正确的玩家得分(+10)。</p>
+          <p>3. 如果点错将扣分(-5)且本局锁定。</p>
+          <p>4. 歌曲可能不在场上！此时点击“没有这首歌”得分(+5)。</p>
+          <button class="btn-primary" @click="showRules = false" style="width:100%; margin-top:15px;">明白</button>
+        </div>
+      </div>
+
+      <div v-if="showSettings" class="modal-overlay" @click.self="showSettings = false">
+        <div class="modal-box">
+          <h2>⚙️ 玩家设置</h2>
+          <div class="form-group">
+            <label>歌牌显示语言：</label>
+            <select v-model="displayMode" style="width:100%; padding:10px; border:2px solid #000; outline:none; font-size:1rem;">
+              <option value="original">原文 (Original)</option>
+              <option value="translation">译文 (Translation)</option>
+            </select>
+          </div>
+          <button class="btn-primary" @click="showSettings = false" style="width:100%; margin-top:15px;">关闭</button>
+        </div>
+      </div>
   </div>
 </template>
 
@@ -434,6 +473,17 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
   transform: translate(2px, 2px);
   box-shadow: 0px 0px 0px #000;
 }
+.modal-overlay {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center;
+  z-index: 100;
+}
+.modal-box {
+  background: #fff; border: 4px solid #000; padding: 25px; width: 90%; max-width: 400px;
+  box-shadow: 8px 8px 0px #000;
+}
+.modal-box h2 { margin-top: 0; border-bottom: 2px solid #000; padding-bottom: 10px; }
+.modal-box p { line-height: 1.6; font-weight: bold; font-size: 0.95rem; }
 
 /* ==========================================
    游戏房间样式 (保持原样)
