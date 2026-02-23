@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onUnmounted, nextTick, watch } from 'vue'
+import { ref, onUnmounted, nextTick, watch, computed } from 'vue'
 
 interface Player { 
   id: string, 
@@ -41,6 +41,11 @@ const myPlayerId = 'user_' + Math.floor(Math.random() * 10000)
 // 2. 游戏内状态
 // ==========================================
 const players = ref<Player[]>([])
+
+const sortedPlayers = computed(() => {
+  return [...players.value].sort((a, b) => b.score - a.score)
+})
+
 // 初始状态下场上没有牌
 const cards = ref<Card[]>([]) 
 const gameState = ref('waiting') // 控制显示“开始按钮”还是“进行中”
@@ -285,6 +290,10 @@ const handleCardClick = (card: Card) => {
 const handleNoSongClick = () => {
   if (gameState.value !== 'playing' || hasAnswered.value) return
 
+  // 点击后立刻将自己的状态锁定，使按钮变灰
+  hasAnswered.value = true
+  chatLogs.value.push('系统: 已选择“没有这首歌”，等待其他玩家操作...')
+
   if (socket && isConnected.value) {
     socket.send(JSON.stringify({
       type: 'no_song',
@@ -332,7 +341,7 @@ const sendChat = () => {
     <div class="game-layout">
       <aside class="sidebar">
         <div class="player-list">
-          <div v-for="player in players" :key="player.id" class="player-item">
+          <div v-for="player in sortedPlayers" :key="player.id" class="player-item">
             <span class="p-name">{{ player.name }}</span>
             <span class="p-score" :class="{ 'negative': player.score < 0 }">{{ player.score }} 分</span>
           </div>
