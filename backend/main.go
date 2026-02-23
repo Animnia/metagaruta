@@ -58,6 +58,7 @@ type Room struct {
 	CurrentSongIndex int           `json:"-"` // 记住当前歌在题库里的位置，方便等会儿移除
 	RoundState       string        `json:"-"` // 新增：记录回合状态 ("preparing" 或 "playing")
 	TimerCancel      chan struct{} `json:"-"` // 新增：用于打断 5 秒强制开局的定时器
+	NoSongCorrect    bool          `json:"-"` // 本回合是否有人正确识别了幽灵歌曲
 }
 
 // WsMessage 是前后端通信的统一 JSON 格式
@@ -216,6 +217,7 @@ func startRound(room *Room) {
 		p.HasAnswered = false
 		p.IsReady = false
 	}
+	room.NoSongCorrect = false // 重置幽灵歌曲正确标记
 
 	// 检查场上是否还有未消除的牌。如果全消除了，游戏结束！
 	matchedCount := 0
@@ -485,7 +487,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				currentRoom.Mutex.Unlock()
 				fmt.Printf("房间 [%s] 已空，销毁房间并释放资源\n", currentRoom.ID)
 			} else {
-				// 还有人在，只广播最新列表
+				// 还有人在，广播最新列表
 				broadcastRoomState(currentRoom)
 			}
 		}
@@ -669,15 +671,20 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			}
 
 		case "restart_game":
-			if currentRoom != nil {
+			// 玩家个人选择"再来一局"：留在房间，回到等待界面
+			if currentRoom != nil && currentPlayer != nil {
 				currentRoom.Mutex.Lock()
-				currentRoom.State = "waiting"
-				currentRoom.CurrentRound = 1
-				currentRoom.RoundState = ""
-				currentRoom.BoardCards = nil
-				currentRoom.SongPool = nil
-				currentRoom.CurrentSong = nil
-				currentRoom.CurrentSongIndex = 0
+				// 如果房间还在 playing 状态，切回 waiting
+				if currentRoom.State != "waiting" {
+					currentRoom.State = "waiting"
+					currentRoom.CurrentRound = 1
+					currentRoom.RoundState = ""
+					currentRoom.BoardCards = nil
+					currentRoom.SongPool = nil
+					currentRoom.CurrentSong = nil
+					currentRoom.CurrentSongIndex = 0
+				}
+				// 重置所有玩家状态
 				for _, p := range currentRoom.Players {
 					p.Score = 0
 					p.HasAnswered = false
@@ -686,11 +693,13 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				}
 				currentRoom.Mutex.Unlock()
 
+				// 只给发送者回复 game_reset，不影响其他人的结算界面
 				resetMsg := WsMessage{
 					Type:    "game_reset",
 					Payload: map[string]interface{}{},
 				}
-				broadcastToRoom(currentRoom, resetMsg)
+				rBytes, _ := json.Marshal(resetMsg)
+				conn.WriteMessage(websocket.TextMessage, rBytes)
 				broadcastRoomState(currentRoom)
 			}
 
@@ -752,7 +761,12 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 						// 如果所有人都答错了，回合结束
 						if isAllAnswered(currentRoom) {
-							endRound(currentRoom, "全军覆没！无人答对。", !isSongOnBoard(currentRoom), false)
+							if currentRoom.NoSongCorrect {
+								// 有人正确识别了幽灵歌曲，不算全军覆没
+								endRound(currentRoom, "本轮幽灵歌曲，全员鉴定完毕！", true, false)
+							} else {
+								endRound(currentRoom, "全军覆没！无人答对。", !isSongOnBoard(currentRoom), false)
+							}
 						}
 					}
 				}
@@ -772,6 +786,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 					if !songOnBoard {
 						// 真的没有这首歌，判断正确！
 						currentPlayer.Score += 5 // 发现没有这首歌奖励 5 分
+						currentRoom.NoSongCorrect = true
 
 						if isAllAnswered(currentRoom) {
 							endRound(currentRoom, "本轮幽灵歌曲，全员鉴定完毕！", true, false)
