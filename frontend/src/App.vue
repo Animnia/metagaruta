@@ -147,6 +147,22 @@ const joinGame = () => {
         }
       }
     }
+
+    else if (data.type === 'countdown_start') {
+      audioStatusText.value = '⏳ 准备播放...'
+      
+      let countdown = 4
+      chatLogs.value.push(`系统: ${countdown} 秒后自动播放...`)
+      
+      const cdTimer = setInterval(() => {
+        countdown--
+        if (countdown > 0) {
+          chatLogs.value.push(`系统: ${countdown} 秒后自动播放...`)
+        } else {
+          clearInterval(cdTimer)
+        }
+      }, 1000)
+    }
     
     // 收到裁判发令枪：所有人同时开始播放！
     else if (data.type === 'play_round') {
@@ -197,18 +213,10 @@ const joinGame = () => {
       }
       
       chatLogs.value.push(`🏆 ${data.payload.reason}`)
-      chatLogs.value.push(`🎵 正确答案是: ${data.payload.correctSong}`)
-
-      let countdown = 4
-      chatLogs.value.push(`系统: ${countdown} 秒后自动开启下一局...`)
-      const cdTimer = setInterval(() => {
-        countdown--
-        if (countdown > 0) {
-          chatLogs.value.push(`系统: ${countdown} 秒后自动开启下一局...`)
-        } else {
-          clearInterval(cdTimer)
-        }
-      }, 1000)
+      // 只有当有人答对场上的歌牌时，才公布答案
+      if (data.payload.showAnswer) {
+        chatLogs.value.push(`🎵 正确答案是: ${data.payload.correctSong}`)
+      }
     }
 
     else if (data.type === 'game_over') {

@@ -254,7 +254,7 @@ func startRound(room *Room) {
 	}
 
 	// 因为当前已经在锁内部，绝对不能调用 broadcastToRoom（会再次造成死锁）
-	// 我们像 forcePlayRound 那样，手动遍历发送
+	// 我们像 startCountdownAndPlay 那样，手动遍历发送
 	msgBytes, _ := json.Marshal(prepMsg)
 	for _, p := range room.Players {
 		p.Conn.WriteMessage(websocket.TextMessage, msgBytes)
@@ -265,32 +265,44 @@ func startRound(room *Room) {
 	go func(r *Room, roundNum int, cancelCh chan struct{}) {
 		select {
 		case <-time.After(5 * time.Second): // 5秒超时
-			forcePlayRound(r, roundNum)
+			startCountdownAndPlay(r, roundNum)
 		case <-cancelCh: // 所有人都提前准备好了
 			return
 		}
 	}(room, room.CurrentRound, room.TimerCancel)
 }
 
-// 阶段二：真正下达播放指令
-func forcePlayRound(room *Room, roundNum int) {
+// 阶段二：开始倒计时，然后正式播放
+func startCountdownAndPlay(room *Room, roundNum int) {
 	room.Mutex.Lock()
-	defer room.Mutex.Unlock()
-
-	// 防止超时和所有人准备好同时触发，确保只执行一次
 	if room.RoundState != "preparing" || room.CurrentRound != roundNum {
+		room.Mutex.Unlock()
+		return
+	}
+	room.RoundState = "countdown" // 🌟 进入新的倒计时状态
+
+	// 告诉前端：可以开始打印 4-3-2-1 了
+	countdownMsg := WsMessage{Type: "countdown_start", Payload: map[string]interface{}{}}
+	cdBytes, _ := json.Marshal(countdownMsg)
+	for _, p := range room.Players {
+		p.Conn.WriteMessage(websocket.TextMessage, cdBytes)
+	}
+	room.Mutex.Unlock() // 必须先解锁，因为我们要睡 4 秒！
+
+	// 服务端严格等待 4 秒
+	time.Sleep(4 * time.Second)
+
+	// 4 秒后，正式下达播放指令
+	room.Mutex.Lock()
+	if room.RoundState != "countdown" || room.CurrentRound != roundNum {
+		room.Mutex.Unlock()
 		return
 	}
 	room.RoundState = "playing"
 
 	fmt.Printf("房间 [%s] 第 %d 局正式播放！\n", room.ID, room.CurrentRound)
 
-	playMsg := WsMessage{
-		Type:    "play_round",
-		Payload: map[string]interface{}{},
-	}
-
-	// 因为当前已经在锁里面了，不能调用 broadcastToRoom (会死锁)，手动遍历发送
+	playMsg := WsMessage{Type: "play_round", Payload: map[string]interface{}{}}
 	msgBytes, _ := json.Marshal(playMsg)
 	for _, p := range room.Players {
 		p.Conn.WriteMessage(websocket.TextMessage, msgBytes)
@@ -303,15 +315,15 @@ func forcePlayRound(room *Room, roundNum int) {
 		case <-time.After(90 * time.Second):
 			r.Mutex.Lock()
 			defer r.Mutex.Unlock()
-			// 如果 90 秒后还是当前这一局且在 playing 状态，强制结束
 			if r.RoundState == "playing" && r.CurrentRound == roundNum {
-				endRound(r, "时间到！无人答对。", !isSongOnBoard(r))
+				// 🌟 超时无人答对，不展示答案
+				endRound(r, "时间到！无人答对。", !isSongOnBoard(r), false)
 			}
 		case <-cancelCh:
-			// 回合提前结束，打断倒计时
 			return
 		}
 	}(room, room.CurrentRound, room.TimerCancel)
+	room.Mutex.Unlock()
 }
 
 // 辅助函数：检查当前歌曲是否真的在场上的 16 张牌中
@@ -336,7 +348,7 @@ func isAllAnswered(room *Room) bool {
 
 // 结束本回合，等待几秒后自动开启下一回合
 // 注意：调用此函数时，必须已经加了 room.Mutex.Lock()！
-func endRound(room *Room, reason string, removeSong bool) {
+func endRound(room *Room, reason string, removeSong bool, showAnswer bool) {
 	room.RoundState = "ended"
 
 	// 1. 打断 90 秒倒计时
@@ -372,6 +384,7 @@ func endRound(room *Room, reason string, removeSong bool) {
 			"reason":      reason,
 			"correctSong": room.CurrentSong.TitleOriginal,
 			"cards":       room.BoardCards, // 发送最新的卡牌状态（包含被消除的牌）
+			"showAnswer":  showAnswer,      // 传给前端，决定是否打印答案
 		},
 	}
 	msgBytes, _ := json.Marshal(endMsg)
@@ -394,9 +407,9 @@ func endRound(room *Room, reason string, removeSong bool) {
 		p.Conn.WriteMessage(websocket.TextMessage, stateBytes)
 	}
 
-	// 4. 开启一个独立的协程，等待 4 秒后自动开启下一局
+	// 4. 开启一个独立的协程，3 秒后开启下一局（留出展示结算画面的时间）
 	go func(r *Room, isGameOver bool) {
-		time.Sleep(4 * time.Second)
+		time.Sleep(3 * time.Second)
 		if isGameOver {
 			overMsg := WsMessage{Type: "game_over", Payload: map[string]interface{}{}}
 			broadcastToRoom(r, overMsg)
@@ -571,8 +584,8 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 						close(currentRoom.TimerCancel)
 						currentRoom.TimerCancel = nil
 					}
-					currentRoom.Mutex.Unlock() // 先解锁，再调用 forcePlayRound
-					forcePlayRound(currentRoom, currentRoom.CurrentRound)
+					currentRoom.Mutex.Unlock() // 先解锁，再调用 startCountdownAndPlay
+					startCountdownAndPlay(currentRoom, currentRoom.CurrentRound)
 				} else {
 					currentRoom.Mutex.Unlock()
 				}
@@ -598,7 +611,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 								break
 							}
 						}
-						endRound(currentRoom, fmt.Sprintf("玩家 [%s] 抢答正确！(+10分)", currentPlayer.Name), true)
+						endRound(currentRoom, fmt.Sprintf("玩家 [%s] 抢答正确！(+10分)", currentPlayer.Name), true, true)
 					} else {
 						// 答错了！
 						currentPlayer.Score -= 5
@@ -609,7 +622,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 						// 如果所有人都答错了，回合结束
 						if isAllAnswered(currentRoom) {
-							endRound(currentRoom, "全军覆没！无人答对。", !isSongOnBoard(currentRoom))
+							endRound(currentRoom, "全军覆没！无人答对。", !isSongOnBoard(currentRoom), false)
 						}
 					}
 				}
@@ -631,7 +644,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 						currentPlayer.Score += 5 // 发现没有这首歌奖励 5 分
 
 						if isAllAnswered(currentRoom) {
-							endRound(currentRoom, "本轮幽灵歌曲，全员鉴定完毕！", true)
+							endRound(currentRoom, "本轮幽灵歌曲，全员鉴定完毕！", true, false)
 						}
 					} else {
 						// 场上明明有这首歌，判断错误！
@@ -641,7 +654,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 						currentPlayer.Conn.WriteMessage(websocket.TextMessage, msgBytes)
 
 						if isAllAnswered(currentRoom) {
-							endRound(currentRoom, "全军覆没！这首歌其实在场上。", false)
+							endRound(currentRoom, "全军覆没！这首歌其实在场上。", false, false)
 						}
 					}
 				}
