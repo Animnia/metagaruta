@@ -226,7 +226,11 @@ func startRound(room *Room) {
 	}
 	if matchedCount >= 16 {
 		fmt.Printf("房间 [%s] 游戏结束，所有歌牌已清空！\n", room.ID)
-		overMsg := WsMessage{Type: "game_over", Payload: map[string]interface{}{}}
+		var pList []Player
+		for _, p := range room.Players {
+			pList = append(pList, *p)
+		}
+		overMsg := WsMessage{Type: "game_over", Payload: map[string]interface{}{"players": pList}}
 		broadcastToRoom(room, overMsg) // 通知所有人结束
 		room.RoundState = "ended"
 		return
@@ -328,7 +332,7 @@ func startCountdownAndPlay(room *Room, roundNum int) {
 			r.Mutex.Lock()
 			defer r.Mutex.Unlock()
 			if r.RoundState == "playing" && r.CurrentRound == roundNum {
-				// 🌟 超时无人答对，不展示答案
+				// 超时无人答对，不展示答案
 				endRound(r, "时间到！无人答对。", !isSongOnBoard(r), false)
 			}
 		case <-cancelCh:
@@ -423,7 +427,13 @@ func endRound(room *Room, reason string, removeSong bool, showAnswer bool) {
 	go func(r *Room, isGameOver bool) {
 		time.Sleep(3 * time.Second)
 		if isGameOver {
-			overMsg := WsMessage{Type: "game_over", Payload: map[string]interface{}{}}
+			r.Mutex.Lock()
+			var pList []Player
+			for _, p := range r.Players {
+				pList = append(pList, *p)
+			}
+			r.Mutex.Unlock()
+			overMsg := WsMessage{Type: "game_over", Payload: map[string]interface{}{"players": pList}}
 			broadcastToRoom(r, overMsg)
 		} else {
 			r.Mutex.Lock()
@@ -656,6 +666,32 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 				// 🌟 发牌完毕后，服务器主动发起第一回合的“准备播放”
 				startRound(currentRoom)
+			}
+
+		case "restart_game":
+			if currentRoom != nil {
+				currentRoom.Mutex.Lock()
+				currentRoom.State = "waiting"
+				currentRoom.CurrentRound = 1
+				currentRoom.RoundState = ""
+				currentRoom.BoardCards = nil
+				currentRoom.SongPool = nil
+				currentRoom.CurrentSong = nil
+				currentRoom.CurrentSongIndex = 0
+				for _, p := range currentRoom.Players {
+					p.Score = 0
+					p.HasAnswered = false
+					p.IsReady = false
+					p.GameReady = false
+				}
+				currentRoom.Mutex.Unlock()
+
+				resetMsg := WsMessage{
+					Type:    "game_reset",
+					Payload: map[string]interface{}{},
+				}
+				broadcastToRoom(currentRoom, resetMsg)
+				broadcastRoomState(currentRoom)
 			}
 
 		case "client_ready": // 🌟 新增：接收前端缓冲完毕的信号

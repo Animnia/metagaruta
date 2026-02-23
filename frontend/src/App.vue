@@ -74,6 +74,22 @@ const allNonOwnersReady = computed(() => {
   return nonOwners.length === 0 || nonOwners.every(p => p.gameReady)
 })
 
+// 结算屏幕状态
+const showResult = ref(false)
+const finalPlayers = ref<Player[]>([])
+const topThree = computed(() => {
+  return [...finalPlayers.value].sort((a, b) => b.score - a.score).slice(0, 3)
+})
+const myRank = computed(() => {
+  const sorted = [...finalPlayers.value].sort((a, b) => b.score - a.score)
+  const idx = sorted.findIndex(p => p.id === myPlayerId)
+  return idx >= 0 ? idx + 1 : -1
+})
+const myFinalScore = computed(() => {
+  const me = finalPlayers.value.find(p => p.id === myPlayerId)
+  return me?.score ?? 0
+})
+
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null // 心跳定时器
 
 // 监听聊天记录变化，自动滚动到底部
@@ -216,6 +232,24 @@ const handleWsMessage = (event: MessageEvent) => {
     audioStatusText.value = '🎉 游戏结束！'
     if (audioPlayer.value) audioPlayer.value.pause()
     chatLogs.value.push('系统: 场上所有歌牌已被找齐，游戏结束！')
+    // 展示结算弹窗
+    if (data.payload.players) {
+      finalPlayers.value = data.payload.players
+    } else {
+      finalPlayers.value = [...players.value]
+    }
+    showResult.value = true
+  }
+
+  else if (data.type === 'game_reset') {
+    // 房间重置回等待状态
+    showResult.value = false
+    gameState.value = 'waiting'
+    cards.value = []
+    currentRound.value = 1
+    hasAnswered.value = false
+    audioStatusText.value = '🔊 等待开始...'
+    chatLogs.value.push('系统: 房间已重置，等待开始新一局！')
   }
 
   else if (data.type === 'error') {
@@ -353,6 +387,29 @@ const sendChat = () => {
     chatMessage.value = ''
   }
 }
+
+const playAgain = () => {
+  if (socket && isConnected.value) {
+    socket.send(JSON.stringify({ type: 'restart_game', payload: {} }))
+  }
+}
+
+const leaveRoom = () => {
+  showResult.value = false
+  if (socket) socket.close()
+  socket = null
+  // 重置所有状态
+  players.value = []
+  cards.value = []
+  gameState.value = 'waiting'
+  currentRound.value = 1
+  chatLogs.value = ['系统: 欢迎来到歌牌房间！']
+  hasAnswered.value = false
+  ownerId.value = ''
+  audioStatusText.value = '🔊 等待开始...'
+  inputRoomId.value = ''
+  currentView.value = 'home'
+}
 </script>
 
 <template>
@@ -457,6 +514,28 @@ const sendChat = () => {
           <button class="btn-primary" @click="showSettings = false" style="width:100%; margin-top:15px;">关闭</button>
         </div>
       </div>
+  </div>
+
+  <!-- 游戏结算弹窗 -->
+  <div v-if="showResult" class="modal-overlay">
+    <div class="modal-box result-box">
+      <h2>🎉 游戏结算</h2>
+      <div class="result-podium">
+        <div v-for="(p, idx) in topThree" :key="p.id" class="podium-item">
+          <span class="podium-rank">{{ ['🥇', '🥈', '🥉'][idx] }}</span>
+          <span class="podium-name">{{ p.name }}</span>
+          <span class="podium-score">{{ p.score }} 分</span>
+        </div>
+      </div>
+      <div class="result-self">
+        <span>你的排名：第 <strong>{{ myRank }}</strong> 名</span>
+        <span>得分：<strong>{{ myFinalScore }}</strong> 分</span>
+      </div>
+      <div class="result-actions">
+        <button class="btn-primary" @click="playAgain">🔁 再来一局</button>
+        <button class="btn-secondary" @click="leaveRoom">🚪 退出房间</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -589,6 +668,19 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 .chat-line { margin-bottom: 4px; }
 .chat-input-box { display: flex; border-top: 1px solid #ddd; }
 .chat-input-box input { flex: 1; border: none; padding: 10px 15px; font-size: 0.95rem; outline: none; }
+
+/* 结算弹窗 */
+.result-box { max-width: 450px; text-align: center; }
+.result-box h2 { font-size: 1.6rem; }
+.result-podium { margin: 20px 0; }
+.podium-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; border-bottom: 2px dashed #ccc; font-size: 1.1rem; font-weight: bold; }
+.podium-item:last-child { border-bottom: none; }
+.podium-rank { font-size: 1.4rem; min-width: 36px; }
+.podium-name { flex: 1; text-align: left; margin-left: 8px; }
+.podium-score { color: #42b883; min-width: 70px; text-align: right; }
+.result-self { border: 2px solid #000; padding: 12px 15px; margin: 15px 0; display: flex; justify-content: space-between; font-weight: bold; font-size: 1rem; background: #f9f9f9; }
+.result-actions { display: flex; gap: 12px; margin-top: 15px; }
+.result-actions .btn-primary, .result-actions .btn-secondary { flex: 1; padding: 12px; font-size: 1rem; }
 
 @media (max-width: 768px) {
   .game-wrapper { padding: 0; }
