@@ -188,9 +188,13 @@ func initGame(room *Room) {
 
 // 阶段一：开始新一回合，发送“准备”指令
 func startRound(room *Room) {
-	// 🌟 修复 1：在这里统一加上锁
+	// 在这里统一加上锁
 	room.Mutex.Lock()
 	defer room.Mutex.Unlock()
+
+	if len(room.Players) == 0 {
+		return
+	}
 
 	room.RoundState = "preparing"
 
@@ -371,17 +375,33 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 	var currentPlayer *Player
 	var currentRoom *Room
 
-	// 🌟 核心修复 1：利用 defer 确保无论什么情况断开，都把玩家移出房间
 	defer func() {
 		if currentRoom != nil && currentPlayer != nil {
-			// 加锁，安全地从 map 中删除自己
 			currentRoom.Mutex.Lock()
 			delete(currentRoom.Players, currentPlayer.ID)
+			isEmpty := len(currentRoom.Players) == 0 // 检查房间是否空了
 			currentRoom.Mutex.Unlock()
 
-			fmt.Printf("玩家 [%s] 离开了房间\n", currentPlayer.Name)
-			// 通知房间里剩下的人，更新列表
-			broadcastRoomState(currentRoom)
+			fmt.Printf("玩家 [%s] 离开了房间 [%s]\n", currentPlayer.Name, currentRoom.ID)
+
+			if isEmpty {
+				// 如果房间空无一人，销毁该房间，防止“幽灵循环”
+				globalMutex.Lock()
+				delete(rooms, currentRoom.ID)
+				globalMutex.Unlock()
+
+				currentRoom.Mutex.Lock()
+				currentRoom.RoundState = "ended" // 强行把状态设为结束
+				if currentRoom.TimerCancel != nil {
+					close(currentRoom.TimerCancel) // 打断可能正在进行的 5 秒或 90 秒倒计时
+					currentRoom.TimerCancel = nil
+				}
+				currentRoom.Mutex.Unlock()
+				fmt.Printf("房间 [%s] 已空，销毁房间并释放资源\n", currentRoom.ID)
+			} else {
+				// 还有人在，只广播最新列表
+				broadcastRoomState(currentRoom)
+			}
 		}
 		conn.Close()
 	}()

@@ -42,8 +42,9 @@ const chatLogs = ref<string[]>(['系统: 欢迎来到歌牌房间！'])
 
 let socket: WebSocket | null = null
 const isConnected = ref(false)
-
 const hasAnswered = ref(false)
+
+let heartbeatInterval: ReturnType<typeof setInterval> | null = null // 心跳定时器
 
 // ==========================================
 // 3. 核心方法：加入房间
@@ -72,6 +73,12 @@ const joinGame = () => {
         playerId: myPlayerId
       }
     }))
+
+    heartbeatInterval = setInterval(() => {
+      if (socket && isConnected.value) {
+        socket.send(JSON.stringify({ type: 'ping', payload: {} }))
+      }
+    }, 30000)
   }
 
   socket.onmessage = (event) => {
@@ -118,6 +125,7 @@ const joinGame = () => {
     
     // 收到裁判发令枪：所有人同时开始播放！
     else if (data.type === 'play_round') {
+      gameState.value = 'playing'
       chatLogs.value.push(`系统: 播放开始！仔细听...`)
       if (audioPlayer.value) {
         audioPlayer.value.play().catch(e => {
@@ -155,7 +163,11 @@ const joinGame = () => {
     }
   }
 
-  socket.onclose = () => { isConnected.value = false }
+  socket.onclose = () => {
+    isConnected.value = false 
+    //清理定时器
+    if (heartbeatInterval) clearInterval(heartbeatInterval)
+  }
 }
 
 const createGame = () => {
