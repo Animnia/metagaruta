@@ -23,6 +23,7 @@ type Player struct {
 	Name        string          `json:"name"`
 	Score       int             `json:"score"`
 	HasAnswered bool            `json:"hasAnswered"` // 本局是否已点过牌
+	GameReady   bool            `json:"gameReady"`   // 游戏开始前的准备状态
 	IsReady     bool            `json:"-"`
 	Conn        *websocket.Conn `json:"-"`
 }
@@ -44,6 +45,7 @@ type Card struct {
 // Room 代表一个游戏房间
 type Room struct {
 	ID      string
+	OwnerID string
 	Players map[string]*Player
 	Mutex   sync.Mutex
 
@@ -138,6 +140,16 @@ func loadSongs() {
 	}
 	json.Unmarshal(file, &globalSongs)
 	fmt.Printf("成功加载 %d 首歌曲到全局题库\n", len(globalSongs))
+}
+
+// 生成唯一的 4 位数字房间号 (调用前必须持有 globalMutex)
+func generateRoomID() string {
+	for {
+		id := fmt.Sprintf("%04d", rand.Intn(10000))
+		if _, exists := rooms[id]; !exists {
+			return id
+		}
+	}
 }
 
 // 洗牌并生成 16 张歌牌
@@ -400,7 +412,7 @@ func endRound(room *Room, reason string, removeSong bool, showAnswer bool) {
 	}
 	stateMsg := WsMessage{
 		Type:    "room_state_update",
-		Payload: map[string]interface{}{"players": playerList},
+		Payload: map[string]interface{}{"players": playerList, "ownerId": room.OwnerID},
 	}
 	stateBytes, _ := json.Marshal(stateMsg)
 	for _, p := range room.Players {
@@ -437,6 +449,13 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			currentRoom.Mutex.Lock()
 			delete(currentRoom.Players, currentPlayer.ID)
 			isEmpty := len(currentRoom.Players) == 0 // 检查房间是否空了
+			// 如果离开的是房主且房间还有人，转移房主身份
+			if !isEmpty && currentRoom.OwnerID == currentPlayer.ID {
+				for _, p := range currentRoom.Players {
+					currentRoom.OwnerID = p.ID
+					break
+				}
+			}
 			currentRoom.Mutex.Unlock()
 
 			fmt.Printf("玩家 [%s] 离开了房间 [%s]\n", currentPlayer.Name, currentRoom.ID)
@@ -479,6 +498,38 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 		switch msg.Type {
 
+		case "create_room":
+			playerName := msg.Payload["playerName"].(string)
+			playerID := msg.Payload["playerId"].(string)
+
+			globalMutex.Lock()
+			roomID := generateRoomID()
+			room := &Room{
+				ID:      roomID,
+				OwnerID: playerID,
+				Players: make(map[string]*Player),
+				State:   "waiting",
+			}
+			rooms[roomID] = room
+			globalMutex.Unlock()
+
+			room.Mutex.Lock()
+			newPlayer := &Player{ID: playerID, Name: playerName, Score: 0, Conn: conn}
+			room.Players[playerID] = newPlayer
+			currentPlayer = newPlayer
+			currentRoom = room
+			room.Mutex.Unlock()
+
+			createdMsg := WsMessage{
+				Type:    "room_created",
+				Payload: map[string]interface{}{"roomId": roomID},
+			}
+			cBytes, _ := json.Marshal(createdMsg)
+			conn.WriteMessage(websocket.TextMessage, cBytes)
+
+			fmt.Printf("玩家 [%s] 创建了房间 [%s]\n", playerName, roomID)
+			broadcastRoomState(room)
+
 		case "join_room":
 			roomID := msg.Payload["roomId"].(string)
 			playerName := msg.Payload["playerName"].(string)
@@ -486,28 +537,44 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 			globalMutex.Lock()
 			room, exists := rooms[roomID]
-			if !exists {
-				room = &Room{
-					ID:      roomID,
-					Players: make(map[string]*Player),
-					State:   "waiting",
-				}
-				rooms[roomID] = room
-			}
 			globalMutex.Unlock()
+
+			if !exists {
+				errMsg := WsMessage{
+					Type:    "error",
+					Payload: map[string]interface{}{"message": "房间不存在！请检查房间号。"},
+				}
+				eBytes, _ := json.Marshal(errMsg)
+				conn.WriteMessage(websocket.TextMessage, eBytes)
+				continue
+			}
 
 			room.Mutex.Lock()
 			if len(room.Players) >= 4 {
-				room.Mutex.Unlock() // 记得解锁
-				// 🌟 核心修复 2：房间满了，给前端发个报错提示，而不是默默无视
+				room.Mutex.Unlock()
 				errMsg := WsMessage{
-					Type: "error",
-					Payload: map[string]interface{}{
-						"message": "房间人数已满 (最多4人)",
-					},
+					Type:    "error",
+					Payload: map[string]interface{}{"message": "房间人数已满 (最多4人)"},
 				}
 				msgBytes, _ := json.Marshal(errMsg)
 				conn.WriteMessage(websocket.TextMessage, msgBytes)
+				continue
+			}
+			nameConflict := false
+			for _, p := range room.Players {
+				if p.Name == playerName {
+					nameConflict = true
+					break
+				}
+			}
+			if nameConflict {
+				room.Mutex.Unlock()
+				errMsg := WsMessage{
+					Type:    "error",
+					Payload: map[string]interface{}{"message": "该房间已有同名玩家，请更换名称！"},
+				}
+				eBytes, _ := json.Marshal(errMsg)
+				conn.WriteMessage(websocket.TextMessage, eBytes)
 				continue
 			}
 
@@ -519,7 +586,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 			fmt.Printf("玩家 [%s] 加入了房间 [%s]\n", playerName, roomID)
 			broadcastRoomState(room)
-			// 如果新玩家中途加入时游戏已经开始，单独向他同步牌局状态
 			if room.State == "playing" {
 				syncMsg := WsMessage{
 					Type: "game_started",
@@ -529,7 +595,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 					},
 				}
 				msgBytes, _ := json.Marshal(syncMsg)
-				conn.WriteMessage(websocket.TextMessage, msgBytes) // 只发给当前这个新连入的连接
+				conn.WriteMessage(websocket.TextMessage, msgBytes)
 			}
 
 		case "chat":
@@ -545,9 +611,37 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				broadcastToRoom(currentRoom, chatMsg)
 			}
 
+		case "toggle_ready":
+			if currentRoom != nil && currentPlayer != nil {
+				currentRoom.Mutex.Lock()
+				if currentRoom.OwnerID != currentPlayer.ID && currentRoom.State == "waiting" {
+					currentPlayer.GameReady = !currentPlayer.GameReady
+				}
+				currentRoom.Mutex.Unlock()
+				broadcastRoomState(currentRoom)
+			}
+
 		case "start_game":
-			// 只有等待中的房间才能开始
-			if currentRoom != nil && currentRoom.State == "waiting" {
+			// 只有房主在等待状态下才能开始
+			if currentRoom != nil && currentPlayer != nil && currentRoom.State == "waiting" {
+				currentRoom.Mutex.Lock()
+				if currentRoom.OwnerID != currentPlayer.ID {
+					currentRoom.Mutex.Unlock()
+					continue
+				}
+				allPlayersReady := true
+				for _, p := range currentRoom.Players {
+					if p.ID != currentRoom.OwnerID && !p.GameReady {
+						allPlayersReady = false
+						break
+					}
+				}
+				if !allPlayersReady {
+					currentRoom.Mutex.Unlock()
+					continue
+				}
+				currentRoom.Mutex.Unlock()
+
 				initGame(currentRoom)
 
 				// 告诉房间里所有人：游戏开始了！发牌！
@@ -687,12 +781,14 @@ func broadcastRoomState(room *Room) {
 	for _, p := range room.Players {
 		playerList = append(playerList, *p)
 	}
+	ownerID := room.OwnerID
 	room.Mutex.Unlock()
 
 	stateMsg := WsMessage{
 		Type: "room_state_update",
 		Payload: map[string]interface{}{
 			"players": playerList,
+			"ownerId": ownerID,
 		},
 	}
 	broadcastToRoom(room, stateMsg)

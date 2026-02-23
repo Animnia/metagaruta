@@ -4,8 +4,8 @@ import { ref, onUnmounted, nextTick, watch, computed } from 'vue'
 interface Player { 
   id: string, 
   name: string, 
-  score: number
-
+  score: number,
+  gameReady: boolean
 }
 interface Card { 
   id: string, 
@@ -62,6 +62,18 @@ const showRules = ref(false)
 const showSettings = ref(false)
 const displayMode = ref('original')
 
+// 房主与准备状态
+const ownerId = ref('')
+const isOwner = computed(() => myPlayerId === ownerId.value)
+const myReadyState = computed(() => {
+  const me = players.value.find(p => p.id === myPlayerId)
+  return me?.gameReady ?? false
+})
+const allNonOwnersReady = computed(() => {
+  const nonOwners = players.value.filter(p => p.id !== ownerId.value)
+  return nonOwners.length === 0 || nonOwners.every(p => p.gameReady)
+})
+
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null // 心跳定时器
 
 // 监听聊天记录变化，自动滚动到底部
@@ -75,32 +87,153 @@ watch(chatLogs, () => {
 
 
 // ==========================================
-// 3. 核心方法：加入房间
+// 3. 核心方法：WebSocket 与房间管理
 // ==========================================
-const joinGame = () => {
-  // 简单的表单验证
-  if (!inputName.value.trim()) return alert('请输入玩家名称！')
-  if (!inputRoomId.value.trim()) return alert('请输入房间号！')
+const handleWsMessage = (event: MessageEvent) => {
+  const data = JSON.parse(event.data)
+  if (data.type === 'room_created') {
+    inputRoomId.value = data.payload.roomId
+  }
+  else if (data.type === 'room_state_update') {
+    players.value = data.payload.players
+    if (data.payload.ownerId) {
+      ownerId.value = data.payload.ownerId
+    }
+  } 
+  else if (data.type === 'chat_receive') {
+    chatLogs.value.push(`${data.payload.sender}: ${data.payload.text}`)
+  }
+  else if (data.type === 'game_started') {
+    // 后端发牌了！
+    cards.value = data.payload.cards
+    currentRound.value = data.payload.round
+    gameState.value = 'playing'
+    chatLogs.value.push('系统: 游戏开始！生成了 16 张歌牌。')
+  }
+  // 收到裁判指令：静音加载音频，设置进度，但不准播放
+  else if (data.type === 'prepare_round') {
+    currentRound.value = data.payload.round
+    hasAnswered.value = false // 新回合开始，恢复答题资格
+    const startTime = data.payload.startTime
+    totalPlayTime = data.payload.playDuration // 后端传来的实际播放时长
+    audioStatusText.value = '⏳ 音频缓冲中...' // 更新状态文本
+    chatLogs.value.push(`系统: 第 ${currentRound.value} 局音频缓冲中...`)
+    
+    // 核心防作弊与防缓存机制：带上当前时间戳 t=...，强迫浏览器重新请求
+    const audioUrl = `/api/audio?roomId=${inputRoomId.value}&t=${new Date().getTime()}`
+    
+    if (audioPlayer.value) {
+      audioPlayer.value.src = audioUrl
+      
+      // 监听浏览器"可以流畅播放"事件
+      audioPlayer.value.oncanplay = () => {
+        // 清空事件，防止因为网络波动重复触发
+        audioPlayer.value!.oncanplay = null 
+        
+        // 跳转到随机生成的裁切时间
+        audioPlayer.value!.currentTime = startTime
+        
+        // 举手告诉裁判：我缓冲完毕了！
+        socket?.send(JSON.stringify({ type: 'client_ready', payload: {} }))
+      }
+    }
+  }
 
-  // 切换页面到游戏房间
-  currentView.value = 'game'
+  else if (data.type === 'countdown_start') {
+    audioStatusText.value = '⏳ 准备播放...'
+    
+    let countdown = 4
+    chatLogs.value.push(`系统: ${countdown} 秒后自动播放...`)
+    
+    const cdTimer = setInterval(() => {
+      countdown--
+      if (countdown > 0) {
+        chatLogs.value.push(`系统: ${countdown} 秒后自动播放...`)
+      } else {
+        clearInterval(cdTimer)
+      }
+    }, 1000)
+  }
+  
+  // 收到裁判发令枪：所有人同时开始播放！
+  else if (data.type === 'play_round') {
+    gameState.value = 'playing'
+    chatLogs.value.push(`系统: 播放开始！仔细听...`)
 
-  // 开始连接 WebSocket (以前这部分在 onMounted 里)
+    remainingTime.value = totalPlayTime
+    audioStatusText.value = '🔊 播放中...'
+    
+    if (playTimer) clearInterval(playTimer)
+    playTimer = setInterval(() => {
+      remainingTime.value--
+      // 最后 15 秒显示倒计时
+      if (remainingTime.value <= 15 && remainingTime.value > 0) {
+        audioStatusText.value = `⏳ 倒计时: ${remainingTime.value} 秒`
+      } else if (remainingTime.value <= 0) {
+        audioStatusText.value = '⏳ 结算中...'
+        clearInterval(playTimer!)
+      } else {
+        audioStatusText.value = '🔊 播放中...'
+      }
+    }, 1000)
+
+    if (audioPlayer.value) {
+      audioPlayer.value.play().catch(e => {
+        console.error('音频播放失败，真实原因:', e) 
+        chatLogs.value.push(`系统: 播放异常 (${e.name})`)
+      })
+    }
+  }
+
+  else if (data.type === 'wrong_answer') {
+    hasAnswered.value = true // 答错了，剥夺本局继续点击的资格
+    chatLogs.value.push('系统: ❌ 回答错误，扣除 5 分，本局无法继续操作！')
+  }
+
+  else if (data.type === 'round_end') {
+    gameState.value = 'ended'
+    hasAnswered.value = true
+    cards.value = data.payload.cards // 刷新牌面，被答对的牌会自动消失
+
+    if (playTimer) clearInterval(playTimer)
+    audioStatusText.value = '⏹️ 回合结束'
+    
+    // 停止播放音乐
+    if (audioPlayer.value) {
+      audioPlayer.value.pause()
+    }
+    
+    chatLogs.value.push(`🏆 ${data.payload.reason}`)
+    // 只有当有人答对场上的歌牌时，才公布答案
+    if (data.payload.showAnswer) {
+      chatLogs.value.push(`🎵 正确答案是: ${data.payload.correctSong}`)
+    }
+  }
+
+  else if (data.type === 'game_over') {
+    gameState.value = 'ended'
+    if (playTimer) clearInterval(playTimer)
+    audioStatusText.value = '🎉 游戏结束！'
+    if (audioPlayer.value) audioPlayer.value.pause()
+    chatLogs.value.push('系统: 场上所有歌牌已被找齐，游戏结束！')
+  }
+
+  else if (data.type === 'error') {
+    alert(data.payload.message)
+    // 如果房间满了被拒绝，退回到首页
+    currentView.value = 'home' 
+    socket?.close()
+  }
+}
+
+const connectWebSocket = (openMessage: object) => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const wsUrl = `${protocol}//${window.location.host}/ws`
   socket = new WebSocket(wsUrl)
 
   socket.onopen = () => {
     isConnected.value = true
-    // 发送加入房间请求，使用用户刚才输入的名字和房间号
-    socket?.send(JSON.stringify({
-      type: 'join_room',
-      payload: {
-        roomId: inputRoomId.value.trim(),
-        playerName: inputName.value.trim(),
-        playerId: myPlayerId
-      }
-    }))
+    socket?.send(JSON.stringify(openMessage))
 
     heartbeatInterval = setInterval(() => {
       if (socket && isConnected.value) {
@@ -109,146 +242,38 @@ const joinGame = () => {
     }, 30000)
   }
 
-  socket.onmessage = (event) => {
-    const data = JSON.parse(event.data)
-    if (data.type === 'room_state_update') {
-      players.value = data.payload.players
-    } 
-    else if (data.type === 'chat_receive') {
-      chatLogs.value.push(`${data.payload.sender}: ${data.payload.text}`)
-    }
-    else if (data.type === 'game_started') {
-      // 后端发牌了！
-      cards.value = data.payload.cards
-      currentRound.value = data.payload.round
-      gameState.value = 'playing'
-      chatLogs.value.push('系统: 游戏开始！生成了 16 张歌牌。')
-    }
-    // 收到裁判指令：静音加载音频，设置进度，但不准播放
-    else if (data.type === 'prepare_round') {
-      currentRound.value = data.payload.round
-      hasAnswered.value = false // 新回合开始，恢复答题资格
-      const startTime = data.payload.startTime
-      totalPlayTime = data.payload.playDuration // 后端传来的实际播放时长
-      audioStatusText.value = '⏳ 音频缓冲中...' // 更新状态文本
-      chatLogs.value.push(`系统: 第 ${currentRound.value} 局音频缓冲中...`)
-      
-      // 核心防作弊与防缓存机制：带上当前时间戳 t=...，强迫浏览器重新请求
-      const audioUrl = `/api/audio?roomId=${inputRoomId.value}&t=${new Date().getTime()}`
-      
-      if (audioPlayer.value) {
-        audioPlayer.value.src = audioUrl
-        
-        // 监听浏览器“可以流畅播放”事件
-        audioPlayer.value.oncanplay = () => {
-          // 清空事件，防止因为网络波动重复触发
-          audioPlayer.value!.oncanplay = null 
-          
-          // 跳转到随机生成的裁切时间
-          audioPlayer.value!.currentTime = startTime
-          
-          // 举手告诉裁判：我缓冲完毕了！
-          socket?.send(JSON.stringify({ type: 'client_ready', payload: {} }))
-        }
-      }
-    }
-
-    else if (data.type === 'countdown_start') {
-      audioStatusText.value = '⏳ 准备播放...'
-      
-      let countdown = 4
-      chatLogs.value.push(`系统: ${countdown} 秒后自动播放...`)
-      
-      const cdTimer = setInterval(() => {
-        countdown--
-        if (countdown > 0) {
-          chatLogs.value.push(`系统: ${countdown} 秒后自动播放...`)
-        } else {
-          clearInterval(cdTimer)
-        }
-      }, 1000)
-    }
-    
-    // 收到裁判发令枪：所有人同时开始播放！
-    else if (data.type === 'play_round') {
-      gameState.value = 'playing'
-      chatLogs.value.push(`系统: 播放开始！仔细听...`)
-
-      remainingTime.value = totalPlayTime
-      audioStatusText.value = '🔊 播放中...'
-      
-      if (playTimer) clearInterval(playTimer)
-      playTimer = setInterval(() => {
-        remainingTime.value--
-        // 最后 15 秒显示倒计时
-        if (remainingTime.value <= 15 && remainingTime.value > 0) {
-          audioStatusText.value = `⏳ 倒计时: ${remainingTime.value} 秒`
-        } else if (remainingTime.value <= 0) {
-          audioStatusText.value = '⏳ 结算中...'
-          clearInterval(playTimer!)
-        } else {
-          audioStatusText.value = '🔊 播放中...'
-        }
-      }, 1000)
-
-      if (audioPlayer.value) {
-        audioPlayer.value.play().catch(e => {
-          console.error('音频播放失败，真实原因:', e) 
-          chatLogs.value.push(`系统: 播放异常 (${e.name})`)
-        })
-      }
-    }
-
-    else if (data.type === 'wrong_answer') {
-      hasAnswered.value = true // 答错了，剥夺本局继续点击的资格
-      chatLogs.value.push('系统: ❌ 回答错误，扣除 5 分，本局无法继续操作！')
-    }
-
-    else if (data.type === 'round_end') {
-      gameState.value = 'ended'
-      hasAnswered.value = true
-      cards.value = data.payload.cards // 刷新牌面，被答对的牌会自动消失
-
-      if (playTimer) clearInterval(playTimer)
-      audioStatusText.value = '⏹️ 回合结束'
-      
-      // 停止播放音乐
-      if (audioPlayer.value) {
-        audioPlayer.value.pause()
-      }
-      
-      chatLogs.value.push(`🏆 ${data.payload.reason}`)
-      // 只有当有人答对场上的歌牌时，才公布答案
-      if (data.payload.showAnswer) {
-        chatLogs.value.push(`🎵 正确答案是: ${data.payload.correctSong}`)
-      }
-    }
-
-    else if (data.type === 'game_over') {
-      gameState.value = 'ended'
-      if (playTimer) clearInterval(playTimer)
-      audioStatusText.value = '🎉 游戏结束！'
-      if (audioPlayer.value) audioPlayer.value.pause()
-      chatLogs.value.push('系统: 场上所有歌牌已被找齐，游戏结束！')
-    }
-
-    else if (data.type === 'error') {
-      alert(data.payload.message)
-      // 如果房间满了被拒绝，退回到首页
-      currentView.value = 'home' 
-      socket?.close()
-    }
-  }
+  socket.onmessage = handleWsMessage
 
   socket.onclose = () => {
     isConnected.value = false 
-    //清理定时器
     if (heartbeatInterval) clearInterval(heartbeatInterval)
   }
 }
 
+const joinGame = () => {
+  if (!inputName.value.trim()) return alert('请输入玩家名称！')
+  if (!inputRoomId.value.trim()) return alert('请输入房间号！')
+  currentView.value = 'game'
+  connectWebSocket({
+    type: 'join_room',
+    payload: {
+      roomId: inputRoomId.value.trim(),
+      playerName: inputName.value.trim(),
+      playerId: myPlayerId
+    }
+  })
+}
+
 const createGame = () => {
-  alert('测试阶段：请直接输入房间号加入已有房间！')
+  if (!inputName.value.trim()) return alert('请输入玩家名称！')
+  currentView.value = 'game'
+  connectWebSocket({
+    type: 'create_room',
+    payload: {
+      playerName: inputName.value.trim(),
+      playerId: myPlayerId
+    }
+  })
 }
 
 const startGame = () => {
@@ -265,6 +290,23 @@ const startGame = () => {
       });
     }
     socket.send(JSON.stringify({ type: 'start_game', payload: {} }))
+  }
+}
+
+const toggleReady = () => {
+  if (socket && isConnected.value) {
+    // 当从"未准备"切换到"准备"时，解锁浏览器音频权限
+    if (audioPlayer.value && !myReadyState.value) {
+      audioPlayer.value.volume = 0
+      audioPlayer.value.play().then(() => {
+        audioPlayer.value!.pause()
+        audioPlayer.value!.volume = 1
+        console.log("✅ 浏览器音频权限解锁成功！")
+      }).catch(e => {
+        console.warn("⚠️ 音频预解锁失败:", e)
+      })
+    }
+    socket.send(JSON.stringify({ type: 'toggle_ready', payload: {} }))
   }
 }
 
@@ -342,8 +384,13 @@ const sendChat = () => {
       <aside class="sidebar">
         <div class="player-list">
           <div v-for="player in sortedPlayers" :key="player.id" class="player-item">
-            <span class="p-name">{{ player.name }}</span>
-            <span class="p-score" :class="{ 'negative': player.score < 0 }">{{ player.score }} 分</span>
+            <span class="p-name">{{ player.name }}<span v-if="player.id === ownerId" class="owner-tag">(房主)</span></span>
+            <template v-if="gameState === 'waiting'">
+              <span v-if="player.id !== ownerId" class="p-ready" :class="{ 'is-ready': player.gameReady }">{{ player.gameReady ? '已准备' : '未准备' }}</span>
+            </template>
+            <template v-else>
+              <span class="p-score" :class="{ 'negative': player.score < 0 }">{{ player.score }} 分</span>
+            </template>
           </div>
         </div>
         <div class="sidebar-bottom">
@@ -357,9 +404,14 @@ const sendChat = () => {
           <div class="audio-status">{{ audioStatusText }}</div>
           <div class="round-display">第 {{ currentRound }} 局</div>
           <div class="actions">
-            <button v-if="gameState === 'waiting'" class="start-btn" @click="startGame">
-              🚀 开始游戏
-            </button>
+            <template v-if="gameState === 'waiting'">
+              <button v-if="isOwner" class="start-btn" :disabled="!allNonOwnersReady" @click="startGame">
+                🚀 开始游戏
+              </button>
+              <button v-else class="ready-btn" :class="{ 'is-ready': myReadyState }" @click="toggleReady">
+                {{ myReadyState ? '✅ 已准备' : '🎯 准备' }}
+              </button>
+            </template>
             <button class="icon-btn" @click="showRules = true">ℹ️</button>
             <button class="icon-btn" @click="showSettings = true">⚙️</button>
           </div>
@@ -520,6 +572,12 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 .top-bar { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 2px solid #000; font-weight: bold; font-size: 1.1rem; }
 .actions { display: flex; gap: 10px; }
 .start-btn { background: #42b883; color: white; border: 2px solid #000; padding: 5px 10px; font-weight: bold; cursor: pointer;}
+.start-btn:disabled { background: #999; cursor: not-allowed; opacity: 0.6; }
+.ready-btn { background: #ff9800; color: white; border: 2px solid #000; padding: 5px 10px; font-weight: bold; cursor: pointer; transition: all 0.2s; }
+.ready-btn.is-ready { background: #42b883; }
+.owner-tag { color: #ff9800; font-size: 0.8em; margin-left: 4px; }
+.p-ready { font-size: 0.85rem; color: #999; }
+.p-ready.is-ready { color: #42b883; }
 .icon-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; }
 .karuta-board { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, auto); grid-template-rows: repeat(4, minmax(0, 1fr)); justify-content: center; gap: 15px 30px; padding: 15px; background-color: #f4f4f4; }
 .karuta-card { aspect-ratio: 2 / 3; height: 100%; border: 3px solid #000; background-color: #fff; border-radius: 4px; display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: 2px 2px 0px #000; transition: transform 0.1s, background-color 0.1s; overflow: hidden; }
