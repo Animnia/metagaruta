@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onUnmounted } from 'vue'
+import { ref, onUnmounted, nextTick, watch } from 'vue'
 
 interface Player { 
   id: string, 
@@ -15,6 +15,14 @@ interface Card {
 }
 
 const audioPlayer = ref<HTMLAudioElement | null>(null)
+const chatHistoryRef = ref<HTMLElement | null>(null)
+
+
+// 倒计时与状态文本控制
+const audioStatusText = ref('🔊 等待开始...')
+let playTimer: ReturnType<typeof setInterval> | null = null
+let remainingTime = ref(0)
+let totalPlayTime = 0
 
 // ==========================================
 // 1. 页面路由与表单状态
@@ -45,6 +53,16 @@ const isConnected = ref(false)
 const hasAnswered = ref(false)
 
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null // 心跳定时器
+
+// 监听聊天记录变化，自动滚动到底部
+watch(chatLogs, () => {
+  nextTick(() => {
+    if (chatHistoryRef.value) {
+      chatHistoryRef.value.scrollTop = chatHistoryRef.value.scrollHeight
+    }
+  })
+}, { deep: true })
+
 
 // ==========================================
 // 3. 核心方法：加入房间
@@ -101,6 +119,8 @@ const joinGame = () => {
       currentRound.value = data.payload.round
       hasAnswered.value = false // 新回合开始，恢复答题资格
       const startTime = data.payload.startTime
+      totalPlayTime = data.payload.playDuration // 后端传来的实际播放时长
+      audioStatusText.value = '⏳ 音频缓冲中...' // 更新状态文本
       chatLogs.value.push(`系统: 第 ${currentRound.value} 局音频缓冲中...`)
       
       // 核心防作弊与防缓存机制：带上当前时间戳 t=...，强迫浏览器重新请求
@@ -127,6 +147,24 @@ const joinGame = () => {
     else if (data.type === 'play_round') {
       gameState.value = 'playing'
       chatLogs.value.push(`系统: 播放开始！仔细听...`)
+
+      remainingTime.value = totalPlayTime
+      audioStatusText.value = '🔊 播放中...'
+      
+      if (playTimer) clearInterval(playTimer)
+      playTimer = setInterval(() => {
+        remainingTime.value--
+        // 最后 15 秒显示倒计时
+        if (remainingTime.value <= 15 && remainingTime.value > 0) {
+          audioStatusText.value = `⏳ 倒计时: ${remainingTime.value} 秒`
+        } else if (remainingTime.value <= 0) {
+          audioStatusText.value = '⏳ 结算中...'
+          clearInterval(playTimer!)
+        } else {
+          audioStatusText.value = '🔊 播放中...'
+        }
+      }, 1000)
+
       if (audioPlayer.value) {
         audioPlayer.value.play().catch(e => {
           console.error('音频播放失败，真实原因:', e) 
@@ -144,6 +182,9 @@ const joinGame = () => {
       gameState.value = 'ended'
       hasAnswered.value = true
       cards.value = data.payload.cards // 刷新牌面，被答对的牌会自动消失
+
+      if (playTimer) clearInterval(playTimer)
+      audioStatusText.value = '⏹️ 回合结束'
       
       // 停止播放音乐
       if (audioPlayer.value) {
@@ -153,6 +194,14 @@ const joinGame = () => {
       chatLogs.value.push(`🏆 ${data.payload.reason}`)
       chatLogs.value.push(`🎵 正确答案是: ${data.payload.correctSong}`)
       chatLogs.value.push('系统: 4 秒后自动开启下一局...')
+    }
+
+    else if (data.type === 'game_over') {
+      gameState.value = 'ended'
+      if (playTimer) clearInterval(playTimer)
+      audioStatusText.value = '🎉 游戏结束！'
+      if (audioPlayer.value) audioPlayer.value.pause()
+      chatLogs.value.push('系统: 场上所有歌牌已被找齐，游戏结束！')
     }
 
     else if (data.type === 'error') {
@@ -273,7 +322,7 @@ const sendChat = () => {
 
       <main class="main-area">
         <header class="top-bar">
-          <div class="audio-status">🔊 等待开始...</div>
+          <div class="audio-status">{{ audioStatusText }}</div>
           <div class="round-display">第 {{ currentRound }} 局</div>
           <div class="actions">
             <button v-if="gameState === 'waiting'" class="start-btn" @click="startGame">
@@ -291,7 +340,7 @@ const sendChat = () => {
         </div>
 
         <footer class="chat-area">
-          <div class="chat-history">
+          <div class="chat-history" ref="chatHistoryRef">
             <div v-for="(log, idx) in chatLogs" :key="idx" class="chat-line">{{ log }}</div>
           </div>
           <div class="chat-input-box">
