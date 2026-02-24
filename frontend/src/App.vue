@@ -51,7 +51,7 @@ const cards = ref<Card[]>([])
 const gameState = ref('waiting') // 控制显示“开始按钮”还是“进行中”
 const currentRound = ref(1)
 const chatMessage = ref('')
-const chatLogs = ref<string[]>(['系统: 欢迎来到歌牌房间！'])
+const chatLogs = ref<string[]>(['系统: 欢迎来到metagaruta！'])
 
 let socket: WebSocket | null = null
 const isConnected = ref(false)
@@ -124,7 +124,7 @@ const handleWsMessage = (event: MessageEvent) => {
     cards.value = data.payload.cards
     currentRound.value = data.payload.round
     gameState.value = 'playing'
-    chatLogs.value.push('系统: 游戏开始！生成了 16 张歌牌。')
+    chatLogs.value.push('系统: 游戏开始！仔细聆听音乐片段，寻找对应的歌牌！')
   }
   // 收到裁判指令：静音加载音频，设置进度，但不准播放
   else if (data.type === 'prepare_round') {
@@ -174,7 +174,7 @@ const handleWsMessage = (event: MessageEvent) => {
   // 收到裁判发令枪：所有人同时开始播放！
   else if (data.type === 'play_round') {
     gameState.value = 'playing'
-    chatLogs.value.push(`系统: 播放开始！仔细听...`)
+    chatLogs.value.push(`系统: 播放开始...`)
 
     remainingTime.value = totalPlayTime
     audioStatusText.value = '🔊 播放中...'
@@ -195,7 +195,6 @@ const handleWsMessage = (event: MessageEvent) => {
 
     if (audioPlayer.value) {
       audioPlayer.value.play().catch(e => {
-        console.error('音频播放失败，真实原因:', e) 
         chatLogs.value.push(`系统: 播放异常 (${e.name})`)
       })
     }
@@ -231,7 +230,7 @@ const handleWsMessage = (event: MessageEvent) => {
     if (playTimer) clearInterval(playTimer)
     audioStatusText.value = '🎉 游戏结束！'
     if (audioPlayer.value) audioPlayer.value.pause()
-    chatLogs.value.push('系统: 场上所有歌牌已被找齐，游戏结束！')
+    chatLogs.value.push('系统: 游戏结束！')
     // 展示结算弹窗
     if (data.payload.players) {
       finalPlayers.value = data.payload.players
@@ -403,7 +402,7 @@ const leaveRoom = () => {
   cards.value = []
   gameState.value = 'waiting'
   currentRound.value = 1
-  chatLogs.value = ['系统: 欢迎来到歌牌房间！']
+  chatLogs.value = ['系统: 欢迎来到metagaruta！']
   hasAnswered.value = false
   ownerId.value = ''
   audioStatusText.value = '🔊 等待开始...'
@@ -416,8 +415,8 @@ const leaveRoom = () => {
   <audio ref="audioPlayer" preload="auto"></audio>
   <div v-if="currentView === 'home'" class="home-wrapper">
     <div class="login-box">
-      <h1 class="game-title">🧠 智力竞技歌牌</h1>
-      <p class="subtitle">Metagaruta Online</p>
+      <h1 class="game-title">Metagaruta Online</h1>
+      <p class="subtitle">在线歌曲抢答</p>
       
       <div class="form-group">
         <label>玩家名称</label>
@@ -495,8 +494,9 @@ const leaveRoom = () => {
           <h2>ℹ️ 游戏玩法</h2>
           <p>1. 仔细聆听播放的音乐片段。</p>
           <p>2. 在 16 张歌牌中寻找对应的歌曲，最先点击正确的玩家得分(+10)。</p>
-          <p>3. 如果点错将扣分(-5)且本局锁定。</p>
+          <p>3. 如果点错将扣分(-5)且本局无法再进行操作。</p>
           <p>4. 歌曲可能不在场上！此时点击“没有这首歌”得分(+5)。</p>
+          <p>5. 每局至多播放音频90秒。</p>
           <button class="btn-primary" @click="showRules = false" style="width:100%; margin-top:15px;">明白</button>
         </div>
       </div>
@@ -541,13 +541,29 @@ const leaveRoom = () => {
 
 <style>
 /* 全局重置 */
-body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #eee; }
+@import url('https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;700&family=Share+Tech+Mono&display=swap');
+body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #f0ecf6; }
 * { box-sizing: border-box; }
 </style>
 
 <style scoped>
 /* ==========================================
-   首页专属样式 (硬核黑白日系风)
+   色板 (日式复古科幻 — 明亮版)
+   --bg-deep:    #f0ecf6  薰衣草白
+   --bg-panel:   #ffffff  面板底色
+   --bg-sidebar: #f8f6fc  侧栏底色
+   --bg-card:    #1c2d52  深海军蓝卡片
+   --accent:     #e94560  赤红强调
+   --accent-dim: #d63b55  暗红
+   --gold:       #c49030  金色
+   --neon-cyan:  #0891b2  深青
+   --text:       #1a1a2e  正文色
+   --text-dim:   #7c7f9a  暗文字
+   --border:     #d4d0e0  边框色
+   ========================================== */
+
+/* ==========================================
+   首页
    ========================================== */
 .home-wrapper {
   width: 100vw;
@@ -555,139 +571,328 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
   display: flex;
   justify-content: center;
   align-items: center;
-  background-color: #f4f4f4;
-  font-family: 'Noto Sans JP', sans-serif;
+  background: radial-gradient(ellipse at 50% 30%, #ede8f5 0%, #f0ecf6 70%);
+  font-family: 'Zen Maru Gothic', 'Noto Sans JP', sans-serif;
+  position: relative;
+  overflow: hidden;
+}
+.home-wrapper::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(8,145,178,0.04) 3px, rgba(8,145,178,0.04) 4px);
+  pointer-events: none;
 }
 
 .login-box {
-  background: #fff;
-  border: 4px solid #000;
+  background: #ffffff;
+  border: 2px solid #0891b2;
   padding: 40px;
   width: 90%;
-  max-width: 400px;
-  box-shadow: 8px 8px 0px #000; /* 硬核阴影 */
+  max-width: 420px;
+  box-shadow: 0 4px 30px rgba(8,145,178,0.10), 0 1px 0 rgba(8,145,178,0.08);
   text-align: center;
+  border-radius: 8px;
+  position: relative;
+}
+.login-box::after {
+  content: '';
+  position: absolute;
+  top: -1px; left: 20%; right: 20%; height: 2px;
+  background: linear-gradient(90deg, transparent, #0891b2, transparent);
 }
 
-.game-title { margin: 0; font-size: 2rem; letter-spacing: 2px; }
-.subtitle { margin-top: 5px; margin-bottom: 30px; font-weight: bold; color: #555; letter-spacing: 1px; }
-
-.form-group {
-  margin-bottom: 20px;
-  text-align: left;
+.game-title {
+  margin: 0; font-size: 2rem; letter-spacing: 3px;
+  color: #1a1a2e;
+  font-family: 'Zen Maru Gothic', serif;
+  text-shadow: 0 0 8px rgba(8,145,178,0.12);
 }
+.subtitle {
+  margin-top: 5px; margin-bottom: 30px;
+  font-weight: 400;
+  color: #0891b2;
+  letter-spacing: 2px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.85rem;
+}
+
+.form-group { margin-bottom: 20px; text-align: left; }
 .form-group label {
-  display: block;
-  font-weight: bold;
-  margin-bottom: 8px;
+  display: block; font-weight: 700; margin-bottom: 8px;
+  color: #7c7f9a; font-size: 0.85rem; letter-spacing: 1px; text-transform: uppercase;
 }
 .form-group input {
-  width: 100%;
-  padding: 12px;
-  border: 2px solid #000;
-  font-size: 1rem;
-  outline: none;
-  transition: box-shadow 0.2s;
+  width: 100%; padding: 12px;
+  border: 1px solid #d4d0e0; font-size: 1rem; outline: none;
+  transition: border-color 0.3s, box-shadow 0.3s;
+  background: #faf9fc; color: #1a1a2e; border-radius: 6px;
+  font-family: 'Zen Maru Gothic', sans-serif;
 }
 .form-group input:focus {
-  box-shadow: 4px 4px 0px rgba(0,0,0,0.2);
+  border-color: #0891b2;
+  box-shadow: 0 0 0 3px rgba(8,145,178,0.12);
 }
+.form-group input::placeholder { color: #b0adc0; }
 
-.btn-group {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  margin-top: 30px;
-}
+.btn-group { display: flex; flex-direction: column; gap: 15px; margin-top: 30px; }
 .btn-primary, .btn-secondary {
-  padding: 12px;
-  font-size: 1.1rem;
-  font-weight: bold;
-  border: 2px solid #000;
-  cursor: pointer;
-  transition: transform 0.1s, box-shadow 0.1s;
+  padding: 12px; font-size: 1.05rem; font-weight: bold;
+  border: 1px solid; cursor: pointer; transition: all 0.2s;
+  border-radius: 6px; font-family: 'Zen Maru Gothic', sans-serif; letter-spacing: 1px;
 }
 .btn-primary {
-  background-color: #000;
-  color: #fff;
-  box-shadow: 4px 4px 0px #ccc;
+  background: linear-gradient(135deg, #e94560, #d63b55);
+  color: #fff; border-color: #e94560;
+  box-shadow: 0 2px 10px rgba(233,69,96,0.22);
+}
+.btn-primary:hover {
+  background: linear-gradient(135deg, #f05070, #e94560);
+  box-shadow: 0 4px 18px rgba(233,69,96,0.32);
+  transform: translateY(-1px);
+}
+.btn-primary:active { transform: translateY(0) scale(0.98); box-shadow: 0 1px 5px rgba(233,69,96,0.18); }
+.btn-primary:disabled {
+  background: #d0ccd8; border-color: #d0ccd8; color: #a09cae;
+  cursor: not-allowed; box-shadow: none; transform: none;
 }
 .btn-secondary {
-  background-color: #fff;
-  color: #000;
-  box-shadow: 4px 4px 0px #000;
+  background: transparent; color: #0891b2; border-color: #0891b2;
+  box-shadow: 0 1px 6px rgba(8,145,178,0.08);
 }
-.btn-primary:active, .btn-secondary:active {
-  transform: translate(2px, 2px);
-  box-shadow: 0px 0px 0px #000;
+.btn-secondary:hover {
+  background: rgba(8,145,178,0.06);
+  box-shadow: 0 2px 12px rgba(8,145,178,0.16);
+  transform: translateY(-1px);
 }
+.btn-secondary:active { transform: translateY(0) scale(0.98); }
+.btn-secondary:disabled {
+  color: #d0ccd8; border-color: #d0ccd8;
+  cursor: not-allowed; box-shadow: none; transform: none;
+}
+
+/* 弹窗 */
 .modal-overlay {
   position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center;
-  z-index: 100;
+  background: rgba(26,26,46,0.40); display: flex; justify-content: center; align-items: center;
+  z-index: 100; backdrop-filter: blur(6px);
 }
 .modal-box {
-  background: #fff; border: 4px solid #000; padding: 25px; width: 90%; max-width: 400px;
-  box-shadow: 8px 8px 0px #000;
+  background: #ffffff; border: 1px solid #0891b2;
+  padding: 25px; width: 90%; max-width: 420px;
+  box-shadow: 0 8px 40px rgba(8,145,178,0.10);
+  border-radius: 8px; color: #1a1a2e;
 }
-.modal-box h2 { margin-top: 0; border-bottom: 2px solid #000; padding-bottom: 10px; }
-.modal-box p { line-height: 1.6; font-weight: bold; font-size: 0.95rem; }
+.modal-box h2 { margin-top: 0; border-bottom: 1px solid #e8e4f0; padding-bottom: 10px; color: #0891b2; }
+.modal-box p { line-height: 1.7; font-weight: 400; font-size: 0.95rem; color: #4a4a60; }
+.modal-box select {
+  width: 100%; padding: 10px; border: 1px solid #d4d0e0 !important; outline: none; font-size: 1rem;
+  background: #faf9fc !important; color: #1a1a2e !important; border-radius: 6px;
+}
 
 /* ==========================================
-   游戏房间样式 (保持原样)
+   游戏房间
    ========================================== */
-.game-wrapper { width: 100vw; height: 100dvh; padding: 10px; display: flex; justify-content: center; align-items: center; }
-.game-layout { display: flex; width: 100%; max-width: 1200px; height: 100%; border: 4px solid #000; background-color: #fcfcfc; font-family: 'Noto Sans JP', sans-serif; box-shadow: 4px 4px 0px rgba(0,0,0,0.2); }
-.sidebar { width: 220px; border-right: 4px solid #000; display: flex; flex-direction: column; background-color: #fff; }
+.game-wrapper {
+  width: 100vw; height: 100dvh; padding: 10px;
+  display: flex; justify-content: center; align-items: center;
+  background: #f0ecf6;
+  font-family: 'Zen Maru Gothic', 'Noto Sans JP', sans-serif;
+}
+.game-layout {
+  display: flex; width: 100%; max-width: 1200px; height: 100%;
+  border: 1px solid #d4d0e0;
+  background-color: #ffffff;
+  box-shadow: 0 4px 30px rgba(0,0,0,0.06);
+  border-radius: 8px; overflow: hidden;
+}
+
+/* 侧边栏 */
+.sidebar { width: 220px; border-right: 1px solid #e8e4f0; display: flex; flex-direction: column; background: #f8f6fc; }
 .player-list { flex: 1; overflow-y: auto; }
-.player-item { border-bottom: 2px solid #000; padding: 12px 10px; display: flex; justify-content: space-between; font-weight: bold; font-size: 0.95rem; }
-.p-score.negative { color: red; }
-.sidebar-bottom { border-top: 4px solid #000; display: flex; flex-direction: column; background-color: #f9f9f9; }
-.no-song-btn { margin: 15px; padding: 12px; border: 2px solid #000; background: #ff5252; color: white; font-weight: bold; font-size: 1rem; cursor: pointer; border-radius: 4px; box-shadow: 2px 2px 0px #000; transition: all 0.1s; }
-.no-song-btn:active { transform: translate(2px, 2px); box-shadow: 0px 0px 0px #000; }
-.no-song-btn.disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
-.room-info { border-top: 2px dashed #000; padding: 10px; text-align: center; font-weight: bold; background: #fff; }
-.main-area { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-.top-bar { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 2px solid #000; font-weight: bold; font-size: 1.1rem; }
-.actions { display: flex; gap: 10px; }
-.start-btn { background: #42b883; color: white; border: 2px solid #000; padding: 5px 10px; font-weight: bold; cursor: pointer;}
-.start-btn:disabled { background: #999; cursor: not-allowed; opacity: 0.6; }
-.ready-btn { background: #ff9800; color: white; border: 2px solid #000; padding: 5px 10px; font-weight: bold; cursor: pointer; transition: all 0.2s; }
-.ready-btn.is-ready { background: #42b883; }
-.owner-tag { color: #ff9800; font-size: 0.8em; margin-left: 4px; }
-.p-ready { font-size: 0.85rem; color: #999; }
-.p-ready.is-ready { color: #42b883; }
-.icon-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; }
-.karuta-board { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, auto); grid-template-rows: repeat(4, minmax(0, 1fr)); justify-content: center; gap: 15px 30px; padding: 15px; background-color: #f4f4f4; }
-.karuta-card { aspect-ratio: 2 / 3; height: 100%; border: 3px solid #000; background-color: #fff; border-radius: 4px; display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: 2px 2px 0px #000; transition: transform 0.1s, background-color 0.1s; overflow: hidden; }
-.karuta-card:active { transform: translate(2px, 2px); box-shadow: 0px 0px 0px #000; }
+.player-item {
+  border-bottom: 1px solid #ece8f4; padding: 12px 10px;
+  display: flex; justify-content: space-between; align-items: center;
+  font-weight: bold; font-size: 0.95rem; color: #3a3a50;
+  transition: background 0.2s;
+}
+.player-item:hover { background: rgba(8,145,178,0.04); }
+.p-name { color: #1a1a2e; }
+.p-score { color: #0891b2; font-family: 'Share Tech Mono', monospace; }
+.p-score.negative { color: #e94560; }
+.owner-tag { color: #c49030; font-size: 0.75em; margin-left: 4px; }
+.p-ready { font-size: 0.8rem; color: #b0adc0; font-family: 'Share Tech Mono', monospace; }
+.p-ready.is-ready { color: #0891b2; font-weight: bold; }
+
+.sidebar-bottom { border-top: 1px solid #e8e4f0; display: flex; flex-direction: column; background: #f4f1fa; }
+.no-song-btn {
+  margin: 12px; padding: 10px;
+  border: 1px solid #e94560; background: rgba(233,69,96,0.07);
+  color: #e94560; font-weight: bold; font-size: 0.95rem;
+  cursor: pointer; border-radius: 6px;
+  transition: all 0.2s;
+  box-shadow: 0 1px 6px rgba(233,69,96,0.06);
+}
+.no-song-btn:hover {
+  background: rgba(233,69,96,0.14);
+  box-shadow: 0 2px 12px rgba(233,69,96,0.14);
+  transform: translateY(-1px);
+}
+.no-song-btn:active { transform: translateY(0) scale(0.97); }
+.no-song-btn.disabled {
+  background: #f0eef2; border-color: #d0ccd8; color: #b0adc0;
+  cursor: not-allowed; transform: none; box-shadow: none;
+}
+.room-info {
+  border-top: 1px dashed #e0dce8; padding: 10px; text-align: center;
+  font-weight: bold; color: #7c7f9a; background: #f0edf6;
+  font-family: 'Share Tech Mono', monospace; font-size: 0.85rem;
+}
+.room-info strong { color: #c49030; }
+
+/* 主区域 */
+.main-area { flex: 1; display: flex; flex-direction: column; min-width: 0; background: #ffffff; }
+.top-bar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 20px; border-bottom: 1px solid #e8e4f0;
+  font-weight: bold; font-size: 1rem; color: #3a3a50;
+  background: #faf9fc;
+}
+.audio-status { font-family: 'Share Tech Mono', monospace; color: #0891b2; font-size: 0.9rem; }
+.round-display { font-family: 'Share Tech Mono', monospace; color: #c49030; }
+.actions { display: flex; gap: 10px; align-items: center; }
+.start-btn {
+  background: linear-gradient(135deg, #e94560, #d63b55);
+  color: white; border: 1px solid #e94560; padding: 5px 12px;
+  font-weight: bold; cursor: pointer; border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(233,69,96,0.18);
+  transition: all 0.2s; font-family: 'Zen Maru Gothic', sans-serif;
+}
+.start-btn:hover {
+  background: linear-gradient(135deg, #f05070, #e94560);
+  box-shadow: 0 4px 16px rgba(233,69,96,0.28);
+  transform: translateY(-1px);
+}
+.start-btn:active { transform: translateY(0) scale(0.97); }
+.start-btn:disabled {
+  background: #d0ccd8; border-color: #d0ccd8; color: #a09cae;
+  cursor: not-allowed; box-shadow: none; transform: none;
+}
+.ready-btn {
+  background: transparent; color: #c49030; border: 1px solid #c49030;
+  padding: 5px 12px; font-weight: bold; cursor: pointer;
+  border-radius: 6px; transition: all 0.2s;
+  box-shadow: 0 1px 6px rgba(196,144,48,0.08);
+  font-family: 'Zen Maru Gothic', sans-serif;
+}
+.ready-btn:hover {
+  background: rgba(196,144,48,0.08);
+  box-shadow: 0 2px 12px rgba(196,144,48,0.16);
+  transform: translateY(-1px);
+}
+.ready-btn:active { transform: translateY(0) scale(0.97); }
+.ready-btn.is-ready {
+  background: rgba(8,145,178,0.08); color: #0891b2; border-color: #0891b2;
+  box-shadow: 0 2px 10px rgba(8,145,178,0.10);
+}
+.ready-btn.is-ready:hover {
+  background: rgba(8,145,178,0.14);
+  box-shadow: 0 4px 16px rgba(8,145,178,0.18);
+}
+.icon-btn {
+  background: none; border: none; font-size: 1.4rem; cursor: pointer;
+  filter: none; transition: transform 0.15s, filter 0.15s;
+}
+.icon-btn:hover { transform: scale(1.15); filter: drop-shadow(0 0 4px rgba(8,145,178,0.25)); }
+.icon-btn:active { transform: scale(0.95); }
+
+/* 歌牌棋盘 */
+.karuta-board {
+  flex: 1; min-height: 0;
+  display: grid; grid-template-columns: repeat(4, auto); grid-template-rows: repeat(4, minmax(0, 1fr));
+  justify-content: center; gap: 12px 24px; padding: 15px;
+  background: radial-gradient(ellipse at center, #eae6f4 0%, #e4e0ee 100%);
+}
+.karuta-card {
+  aspect-ratio: 2 / 3; height: 100%;
+  border: 1.5px solid #b8b0cc;
+  background: linear-gradient(170deg, #2a3f6e, #1c2d52);
+  border-radius: 6px;
+  display: flex; justify-content: center; align-items: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(28,37,65,0.18), inset 0 1px 0 rgba(255,255,255,0.05);
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s, opacity 0.15s;
+  overflow: hidden;
+  position: relative;
+}
+.karuta-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(8,145,178,0.25), transparent);
+}
+.karuta-card:hover {
+  border-color: #0891b2;
+  box-shadow: 0 4px 18px rgba(8,145,178,0.20), inset 0 1px 0 rgba(255,255,255,0.08);
+  transform: translateY(-3px);
+}
+.karuta-card:active {
+  transform: translateY(0) scale(0.96);
+  box-shadow: 0 1px 4px rgba(28,37,65,0.2);
+  border-color: #e94560;
+}
 .karuta-card.card-hidden { visibility: hidden; }
-.card-text { writing-mode: vertical-rl; text-orientation: upright; letter-spacing: 2px; font-size: clamp(0.9rem, 1.5vh, 1.2rem); font-weight: 600; text-align: center; padding: 5px; }
-.chat-area { height: 120px; border-top: 4px solid #000; display: flex; flex-direction: column; background: #fff; }
-.chat-history { flex: 1; padding: 8px 15px; overflow-y: auto; font-size: 0.85rem; color: #333; }
+.card-text {
+  writing-mode: vertical-rl; text-orientation: upright;
+  letter-spacing: 2px; font-size: clamp(0.9rem, 1.5vh, 1.2rem);
+  font-weight: 600; text-align: center; padding: 5px;
+  color: #e0dce8;
+  text-shadow: 0 0 6px rgba(8,145,178,0.10);
+}
+
+/* 聊天区 */
+.chat-area { height: 120px; border-top: 1px solid #e8e4f0; display: flex; flex-direction: column; background: #faf9fc; }
+.chat-history { flex: 1; padding: 8px 15px; overflow-y: auto; font-size: 0.83rem; color: #7c7f9a; }
 .chat-line { margin-bottom: 4px; }
-.chat-input-box { display: flex; border-top: 1px solid #ddd; }
-.chat-input-box input { flex: 1; border: none; padding: 10px 15px; font-size: 0.95rem; outline: none; }
+.chat-input-box { display: flex; border-top: 1px solid #ece8f4; }
+.chat-input-box input {
+  flex: 1; border: none; padding: 10px 15px; font-size: 0.95rem; outline: none;
+  background: #ffffff; color: #1a1a2e;
+  font-family: 'Zen Maru Gothic', sans-serif;
+}
+.chat-input-box input::placeholder { color: #b0adc0; }
+.chat-input-box input:focus { background: #f8f6ff; }
 
 /* 结算弹窗 */
 .result-box { max-width: 450px; text-align: center; }
-.result-box h2 { font-size: 1.6rem; }
+.result-box h2 { font-size: 1.6rem; color: #c49030; }
 .result-podium { margin: 20px 0; }
-.podium-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; border-bottom: 2px dashed #ccc; font-size: 1.1rem; font-weight: bold; }
+.podium-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 15px; border-bottom: 1px dashed #e8e4f0;
+  font-size: 1.05rem; font-weight: bold; color: #3a3a50;
+}
 .podium-item:last-child { border-bottom: none; }
 .podium-rank { font-size: 1.4rem; min-width: 36px; }
 .podium-name { flex: 1; text-align: left; margin-left: 8px; }
-.podium-score { color: #42b883; min-width: 70px; text-align: right; }
-.result-self { border: 2px solid #000; padding: 12px 15px; margin: 15px 0; display: flex; justify-content: space-between; font-weight: bold; font-size: 1rem; background: #f9f9f9; }
+.podium-score { color: #0891b2; min-width: 70px; text-align: right; font-family: 'Share Tech Mono', monospace; }
+.result-self {
+  border: 1px solid #e8e4f0; padding: 12px 15px; margin: 15px 0;
+  display: flex; justify-content: space-between; font-weight: bold; font-size: 1rem;
+  background: #faf9fc; color: #3a3a50; border-radius: 6px;
+}
 .result-actions { display: flex; gap: 12px; margin-top: 15px; }
 .result-actions .btn-primary, .result-actions .btn-secondary { flex: 1; padding: 12px; font-size: 1rem; }
 
+/* ==========================================
+   移动端响应式
+   ========================================== */
 @media (max-width: 768px) {
   .game-wrapper { padding: 0; }
-  .game-layout { border: none; flex-direction: column; }
-  .sidebar { width: 100%; border-right: none; border-bottom: 3px solid #000; flex-direction: row; justify-content: space-between; align-items: stretch; }
-  .player-list { display: flex; overflow-x: auto; flex: 1; border-right: 2px dashed #000; }
-  .player-item { border-bottom: none; border-right: 1px solid #ccc; padding: 10px; flex-direction: column; justify-content: center; align-items: center; min-width: 70px; }
+  .game-layout { border: none; flex-direction: column; border-radius: 0; }
+  .sidebar { width: 100%; border-right: none; border-bottom: 1px solid #e8e4f0; flex-direction: row; justify-content: space-between; align-items: stretch; }
+  .player-list { display: flex; overflow-x: auto; flex: 1; border-right: 1px dashed #e8e4f0; }
+  .player-item { border-bottom: none; border-right: 1px solid #ece8f4; padding: 10px; flex-direction: column; justify-content: center; align-items: center; min-width: 70px; }
   .p-name { font-size: 0.8rem; }
   .p-score { font-size: 0.9rem; }
   .sidebar-bottom { border-top: none; flex-direction: column; justify-content: center; min-width: 100px; }
@@ -695,7 +900,7 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
   .room-info { border-top: none; padding: 2px; font-size: 0.8rem; }
   .top-bar { padding: 8px 10px; font-size: 0.9rem; }
   .karuta-board { gap: 6px; padding: 6px; }
-  .karuta-card { border-width: 2px; box-shadow: 1px 1px 0px #000; }
+  .karuta-card { box-shadow: 0 1px 4px rgba(28,37,65,0.15); }
   .card-text { letter-spacing: 0px; }
   .chat-area { height: 100px; }
 }
