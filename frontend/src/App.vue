@@ -1009,12 +1009,16 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
    Touhou 模式歌牌
    ========================================== */
 .touhou-board {
-  grid-template-columns: repeat(4, auto); grid-template-rows: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  justify-items: center;
 }
 .touhou-card {
   background: #2c3044 !important;
   overflow: hidden;
   position: relative;
+  width: auto;
+  max-width: 100%;
 }
 .touhou-card .card-picture {
   width: 100%; height: 100%;
@@ -1086,6 +1090,8 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
   .room-info { border-top: none; padding: 2px; font-size: 0.8rem; }
   .top-bar { padding: 8px 10px; font-size: 0.9rem; }
   .karuta-board { gap: 6px; padding: 6px; }
+  .touhou-board { gap: 4px 6px; }
+  .touhou-card { max-width: 100%; }
   .karuta-card { box-shadow: 0 1px 4px rgba(44,48,68,0.15); }
   .card-text { letter-spacing: 0px; }
   .chat-area { height: 100px; }
