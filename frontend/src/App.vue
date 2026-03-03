@@ -477,7 +477,7 @@ const leaveRoom = () => {
     <div v-if="showContact" class="modal-overlay" @click.self="showContact = false">
       <div class="modal-box">
         <h2>📬 联系开发者</h2>
-        <p style="color:#7c7f9a; line-height:1.8; text-align:left;">
+        <p style="color:#8a857a; line-height:1.8; text-align:left;">
           如果你有任何问题、建议或想法，欢迎通过以下方式联系：
         </p>
         <div class="contact-list">
@@ -619,25 +619,25 @@ const leaveRoom = () => {
 
 <style>
 /* 全局重置 */
-@import url('https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;700&family=Share+Tech+Mono&display=swap');
-body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #f0ecf6; }
+@import url('https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;700&family=Share+Tech+Mono&family=Noto+Serif+JP:wght@400;700&display=swap');
+body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #f3f0e8; }
 * { box-sizing: border-box; }
 </style>
 
 <style scoped>
 /* ==========================================
-   色板 (日式复古科幻 — 明亮版)
-   --bg-deep:    #f0ecf6  薰衣草白
-   --bg-panel:   #ffffff  面板底色
-   --bg-sidebar: #f8f6fc  侧栏底色
-   --bg-card:    #1c2d52  深海军蓝卡片
-   --accent:     #e94560  赤红强调
-   --accent-dim: #d63b55  暗红
-   --gold:       #c49030  金色
-   --neon-cyan:  #0891b2  深青
-   --text:       #1a1a2e  正文色
-   --text-dim:   #7c7f9a  暗文字
-   --border:     #d4d0e0  边框色
+   色板 (和風サイバー — 日式古典×赛博meta)
+   --bg-deep:    #f3f0e8  和紙白 (warm washi paper)
+   --bg-panel:   #faf8f2  生成色 (aged paper white)
+   --bg-sidebar: #f0ede4  鳥の子 (warm ivory)
+   --bg-card:    #2c3044  鉄紺 (iron navy)
+   --accent:     #c05550  朱色 (vermillion)
+   --accent-dim: #a84a42  茜色 (madder red)
+   --gold:       #b89040  金茶 (gold brown)
+   --teal:       #5d8a8a  青磁色 (celadon teal)
+   --text:       #3a3530  墨色 (sumi ink)
+   --text-dim:   #8a857a  利休鼠 (Rikyu gray)
+   --border:     #d6d1c6  灰白 (warm ash)
    ========================================== */
 
 /* ==========================================
@@ -649,7 +649,7 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
   display: flex;
   justify-content: center;
   align-items: center;
-  background: radial-gradient(ellipse at 50% 30%, #ede8f5 0%, #f0ecf6 70%);
+  background: radial-gradient(ellipse at 50% 30%, #edeae2 0%, #f3f0e8 70%);
   font-family: 'Zen Maru Gothic', 'Noto Sans JP', sans-serif;
   position: relative;
   overflow: hidden;
@@ -659,17 +659,18 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
   position: absolute;
   inset: 0;
   background:
-    repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(8,145,178,0.04) 3px, rgba(8,145,178,0.04) 4px);
+    repeating-linear-gradient(0deg, transparent, transparent 50px, rgba(93,138,138,0.035) 50px, rgba(93,138,138,0.035) 51px),
+    repeating-linear-gradient(90deg, transparent, transparent 50px, rgba(93,138,138,0.035) 50px, rgba(93,138,138,0.035) 51px);
   pointer-events: none;
 }
 
 .login-box {
-  background: #ffffff;
-  border: 2px solid #0891b2;
+  background: #faf8f2;
+  border: 2px solid #5d8a8a;
   padding: 40px;
   width: 90%;
   max-width: 420px;
-  box-shadow: 0 4px 30px rgba(8,145,178,0.10), 0 1px 0 rgba(8,145,178,0.08);
+  box-shadow: 0 4px 30px rgba(93,138,138,0.10), 0 1px 0 rgba(93,138,138,0.08);
   text-align: center;
   border-radius: 8px;
   position: relative;
@@ -677,20 +678,20 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 .login-box::after {
   content: '';
   position: absolute;
-  top: -1px; left: 20%; right: 20%; height: 2px;
-  background: linear-gradient(90deg, transparent, #0891b2, transparent);
+  top: -1px; left: 10%; right: 10%; height: 2px;
+  background: linear-gradient(90deg, transparent, #5d8a8a 30%, #b89040 50%, #5d8a8a 70%, transparent);
 }
 
 .game-title {
-  margin: 0; font-size: 2rem; letter-spacing: 3px;
-  color: #1a1a2e;
-  font-family: 'Zen Maru Gothic', serif;
-  text-shadow: 0 0 8px rgba(8,145,178,0.12);
+  margin: 0; font-size: 2rem; letter-spacing: 4px;
+  color: #3a3530;
+  font-family: 'Noto Serif JP', 'Zen Maru Gothic', serif;
+  text-shadow: 0 0 10px rgba(93,138,138,0.15);
 }
 .subtitle {
   margin-top: 5px; margin-bottom: 30px;
   font-weight: 400;
-  color: #0891b2;
+  color: #5d8a8a;
   letter-spacing: 2px;
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.85rem;
@@ -699,20 +700,20 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 .form-group { margin-bottom: 20px; text-align: left; }
 .form-group label {
   display: block; font-weight: 700; margin-bottom: 8px;
-  color: #7c7f9a; font-size: 0.85rem; letter-spacing: 1px; text-transform: uppercase;
+  color: #8a857a; font-size: 0.85rem; letter-spacing: 1px; text-transform: uppercase;
 }
 .form-group input {
   width: 100%; padding: 12px;
-  border: 1px solid #d4d0e0; font-size: 1rem; outline: none;
+  border: 1px solid #d6d1c6; font-size: 1rem; outline: none;
   transition: border-color 0.3s, box-shadow 0.3s;
-  background: #faf9fc; color: #1a1a2e; border-radius: 6px;
+  background: #f5f2ea; color: #3a3530; border-radius: 6px;
   font-family: 'Zen Maru Gothic', sans-serif;
 }
 .form-group input:focus {
-  border-color: #0891b2;
-  box-shadow: 0 0 0 3px rgba(8,145,178,0.12);
+  border-color: #5d8a8a;
+  box-shadow: 0 0 0 3px rgba(93,138,138,0.12);
 }
-.form-group input::placeholder { color: #b0adc0; }
+.form-group input::placeholder { color: #b0ab9e; }
 
 /* 游戏模式选择器 */
 .mode-selector {
@@ -720,14 +721,14 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 }
 .mode-btn {
   flex: 1; padding: 10px 8px; font-size: 0.95rem; font-weight: bold;
-  border: 2px solid #d4d0e0; background: #faf9fc; color: #7c7f9a;
+  border: 2px solid #d6d1c6; background: #f5f2ea; color: #8a857a;
   cursor: pointer; border-radius: 6px; transition: all 0.2s;
   font-family: 'Zen Maru Gothic', sans-serif;
 }
-.mode-btn:hover { border-color: #0891b2; color: #0891b2; background: rgba(8,145,178,0.04); }
+.mode-btn:hover { border-color: #5d8a8a; color: #5d8a8a; background: rgba(93,138,138,0.04); }
 .mode-btn.active {
-  border-color: #0891b2; color: #0891b2; background: rgba(8,145,178,0.08);
-  box-shadow: 0 0 0 3px rgba(8,145,178,0.12);
+  border-color: #5d8a8a; color: #5d8a8a; background: rgba(93,138,138,0.08);
+  box-shadow: 0 0 0 3px rgba(93,138,138,0.12);
 }
 
 .btn-group { display: flex; flex-direction: column; gap: 15px; margin-top: 30px; }
@@ -741,16 +742,16 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
   display: inline-flex; align-items: center; gap: 6px;
   padding: 8px 14px; border-radius: 20px;
   font-size: 0.85rem; font-weight: 600;
-  background: rgba(255,255,255,0.85); color: #7c7f9a;
-  border: 1px solid #d4d0e0; cursor: pointer;
+  background: rgba(255,255,255,0.85); color: #8a857a;
+  border: 1px solid #d6d1c6; cursor: pointer;
   text-decoration: none;
   font-family: 'Zen Maru Gothic', sans-serif; letter-spacing: 0.5px;
   transition: all 0.2s; backdrop-filter: blur(6px);
 }
 .footer-link:hover {
-  color: #0891b2; border-color: #0891b2;
+  color: #5d8a8a; border-color: #5d8a8a;
   background: rgba(255,255,255,0.95);
-  box-shadow: 0 2px 12px rgba(8,145,178,0.12);
+  box-shadow: 0 2px 12px rgba(93,138,138,0.12);
   transform: translateY(-1px);
 }
 .footer-link svg { flex-shrink: 0; }
@@ -759,15 +760,15 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 .contact-list { margin: 15px 0 5px; }
 .contact-item {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 10px 12px; border-bottom: 1px dashed #e8e4f0;
+  padding: 10px 12px; border-bottom: 1px dashed #e2ded4;
 }
 .contact-item:last-child { border-bottom: none; }
 .contact-label {
-  font-weight: 700; color: #7c7f9a; font-size: 0.85rem;
+  font-weight: 700; color: #8a857a; font-size: 0.85rem;
   letter-spacing: 1px; text-transform: uppercase;
 }
 .contact-value {
-  color: #0891b2; font-weight: 600; font-size: 0.95rem;
+  color: #5d8a8a; font-weight: 600; font-size: 0.95rem;
   text-decoration: none;
 }
 .contact-value:hover { text-decoration: underline; }
@@ -777,52 +778,52 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
   border-radius: 6px; font-family: 'Zen Maru Gothic', sans-serif; letter-spacing: 1px;
 }
 .btn-primary {
-  background: linear-gradient(135deg, #e94560, #d63b55);
-  color: #fff; border-color: #e94560;
-  box-shadow: 0 2px 10px rgba(233,69,96,0.22);
+  background: linear-gradient(135deg, #c05550, #a84a42);
+  color: #fff; border-color: #c05550;
+  box-shadow: 0 2px 10px rgba(192,85,80,0.22);
 }
 .btn-primary:hover {
-  background: linear-gradient(135deg, #f05070, #e94560);
-  box-shadow: 0 4px 18px rgba(233,69,96,0.32);
+  background: linear-gradient(135deg, #cf6058, #c05550);
+  box-shadow: 0 4px 18px rgba(192,85,80,0.32);
   transform: translateY(-1px);
 }
-.btn-primary:active { transform: translateY(0) scale(0.98); box-shadow: 0 1px 5px rgba(233,69,96,0.18); }
+.btn-primary:active { transform: translateY(0) scale(0.98); box-shadow: 0 1px 5px rgba(192,85,80,0.18); }
 .btn-primary:disabled {
-  background: #d0ccd8; border-color: #d0ccd8; color: #a09cae;
+  background: #ccc8bc; border-color: #ccc8bc; color: #a09c90;
   cursor: not-allowed; box-shadow: none; transform: none;
 }
 .btn-secondary {
-  background: transparent; color: #0891b2; border-color: #0891b2;
-  box-shadow: 0 1px 6px rgba(8,145,178,0.08);
+  background: transparent; color: #5d8a8a; border-color: #5d8a8a;
+  box-shadow: 0 1px 6px rgba(93,138,138,0.08);
 }
 .btn-secondary:hover {
-  background: rgba(8,145,178,0.06);
-  box-shadow: 0 2px 12px rgba(8,145,178,0.16);
+  background: rgba(93,138,138,0.06);
+  box-shadow: 0 2px 12px rgba(93,138,138,0.16);
   transform: translateY(-1px);
 }
 .btn-secondary:active { transform: translateY(0) scale(0.98); }
 .btn-secondary:disabled {
-  color: #d0ccd8; border-color: #d0ccd8;
+  color: #ccc8bc; border-color: #ccc8bc;
   cursor: not-allowed; box-shadow: none; transform: none;
 }
 
 /* 弹窗 */
 .modal-overlay {
   position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(26,26,46,0.40); display: flex; justify-content: center; align-items: center;
+  background: rgba(58,53,48,0.40); display: flex; justify-content: center; align-items: center;
   z-index: 100; backdrop-filter: blur(6px);
 }
 .modal-box {
-  background: #ffffff; border: 1px solid #0891b2;
+  background: #faf8f2; border: 1px solid #5d8a8a;
   padding: 25px; width: 90%; max-width: 420px;
-  box-shadow: 0 8px 40px rgba(8,145,178,0.10);
-  border-radius: 8px; color: #1a1a2e;
+  box-shadow: 0 8px 40px rgba(93,138,138,0.10);
+  border-radius: 8px; color: #3a3530;
 }
-.modal-box h2 { margin-top: 0; border-bottom: 1px solid #e8e4f0; padding-bottom: 10px; color: #0891b2; }
-.modal-box p { line-height: 1.7; font-weight: 400; font-size: 0.95rem; color: #4a4a60; }
+.modal-box h2 { margin-top: 0; border-bottom: 1px solid #e2ded4; padding-bottom: 10px; color: #5d8a8a; }
+.modal-box p { line-height: 1.7; font-weight: 400; font-size: 0.95rem; color: #5a5650; }
 .modal-box select {
-  width: 100%; padding: 10px; border: 1px solid #d4d0e0 !important; outline: none; font-size: 1rem;
-  background: #faf9fc !important; color: #1a1a2e !important; border-radius: 6px;
+  width: 100%; padding: 10px; border: 1px solid #d6d1c6 !important; outline: none; font-size: 1rem;
+  background: #f5f2ea !important; color: #3a3530 !important; border-radius: 6px;
 }
 
 /* ==========================================
@@ -831,122 +832,122 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 .game-wrapper {
   width: 100vw; height: 100dvh; padding: 10px;
   display: flex; justify-content: center; align-items: center;
-  background: #f0ecf6;
+  background: #f3f0e8;
   font-family: 'Zen Maru Gothic', 'Noto Sans JP', sans-serif;
 }
 .game-layout {
   display: flex; width: 100%; max-width: 1200px; height: 100%;
-  border: 1px solid #d4d0e0;
-  background-color: #ffffff;
+  border: 1px solid #d6d1c6;
+  background-color: #faf8f2;
   box-shadow: 0 4px 30px rgba(0,0,0,0.06);
   border-radius: 8px; overflow: hidden;
 }
 
 /* 侧边栏 */
-.sidebar { width: 220px; border-right: 1px solid #e8e4f0; display: flex; flex-direction: column; background: #f8f6fc; }
+.sidebar { width: 220px; border-right: 1px solid #e2ded4; display: flex; flex-direction: column; background: #f0ede4; }
 .player-list { flex: 1; overflow-y: auto; }
 .player-item {
-  border-bottom: 1px solid #ece8f4; padding: 12px 10px;
+  border-bottom: 1px solid #e6e2d8; padding: 12px 10px;
   display: flex; justify-content: space-between; align-items: center;
-  font-weight: bold; font-size: 0.95rem; color: #3a3a50;
+  font-weight: bold; font-size: 0.95rem; color: #4a4640;
   transition: background 0.2s;
 }
-.player-item:hover { background: rgba(8,145,178,0.04); }
-.p-name { color: #1a1a2e; }
-.p-score { color: #0891b2; font-family: 'Share Tech Mono', monospace; }
-.p-score.negative { color: #e94560; }
-.owner-tag { color: #c49030; font-size: 0.75em; margin-left: 4px; }
-.p-ready { font-size: 0.8rem; color: #b0adc0; font-family: 'Share Tech Mono', monospace; }
-.p-ready.is-ready { color: #0891b2; font-weight: bold; }
+.player-item:hover { background: rgba(93,138,138,0.04); }
+.p-name { color: #3a3530; }
+.p-score { color: #5d8a8a; font-family: 'Share Tech Mono', monospace; }
+.p-score.negative { color: #c05550; }
+.owner-tag { color: #b89040; font-size: 0.75em; margin-left: 4px; }
+.p-ready { font-size: 0.8rem; color: #b0ab9e; font-family: 'Share Tech Mono', monospace; }
+.p-ready.is-ready { color: #5d8a8a; font-weight: bold; }
 
-.sidebar-bottom { border-top: 1px solid #e8e4f0; display: flex; flex-direction: column; background: #f4f1fa; }
+.sidebar-bottom { border-top: 1px solid #e2ded4; display: flex; flex-direction: column; background: #ece9e0; }
 .no-song-btn {
   margin: 12px; padding: 10px;
-  border: 1px solid #e94560; background: rgba(233,69,96,0.07);
-  color: #e94560; font-weight: bold; font-size: 0.95rem;
+  border: 1px solid #c05550; background: rgba(192,85,80,0.07);
+  color: #c05550; font-weight: bold; font-size: 0.95rem;
   cursor: pointer; border-radius: 6px;
   transition: all 0.2s;
-  box-shadow: 0 1px 6px rgba(233,69,96,0.06);
+  box-shadow: 0 1px 6px rgba(192,85,80,0.06);
 }
 .no-song-btn:hover {
-  background: rgba(233,69,96,0.14);
-  box-shadow: 0 2px 12px rgba(233,69,96,0.14);
+  background: rgba(192,85,80,0.14);
+  box-shadow: 0 2px 12px rgba(192,85,80,0.14);
   transform: translateY(-1px);
 }
 .no-song-btn:active { transform: translateY(0) scale(0.97); }
 .no-song-btn.disabled {
-  background: #f0eef2; border-color: #d0ccd8; color: #b0adc0;
+  background: #ebe8df; border-color: #ccc8bc; color: #b0ab9e;
   cursor: not-allowed; transform: none; box-shadow: none;
 }
 .room-info {
-  border-top: 1px dashed #e0dce8; padding: 10px; text-align: center;
-  font-weight: bold; color: #7c7f9a; background: #f0edf6;
+  border-top: 1px dashed #ddd9ce; padding: 10px; text-align: center;
+  font-weight: bold; color: #8a857a; background: #ebe8df;
   font-family: 'Share Tech Mono', monospace; font-size: 0.85rem;
 }
-.room-info strong { color: #c49030; }
+.room-info strong { color: #b89040; }
 
 /* 房间模式标签 */
 .room-mode-tag {
   padding: 4px 0; text-align: center; font-size: 0.8rem; font-weight: bold;
   font-family: 'Share Tech Mono', monospace; letter-spacing: 1px;
 }
-.room-mode-tag.vocaloid { color: #0891b2; background: rgba(8,145,178,0.06); }
-.room-mode-tag.touhou { color: #e94560; background: rgba(233,69,96,0.06); }
+.room-mode-tag.vocaloid { color: #5d8a8a; background: rgba(93,138,138,0.06); }
+.room-mode-tag.touhou { color: #c05550; background: rgba(192,85,80,0.06); }
 
 /* 主区域 */
-.main-area { flex: 1; display: flex; flex-direction: column; min-width: 0; background: #ffffff; }
+.main-area { flex: 1; display: flex; flex-direction: column; min-width: 0; background: #faf8f2; }
 .top-bar {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 12px 20px; border-bottom: 1px solid #e8e4f0;
-  font-weight: bold; font-size: 1rem; color: #3a3a50;
-  background: #faf9fc;
+  padding: 12px 20px; border-bottom: 1px solid #e2ded4;
+  font-weight: bold; font-size: 1rem; color: #4a4640;
+  background: #f5f2ea;
 }
-.audio-status { font-family: 'Share Tech Mono', monospace; color: #0891b2; font-size: 0.9rem; }
-.round-display { font-family: 'Share Tech Mono', monospace; color: #c49030; }
+.audio-status { font-family: 'Share Tech Mono', monospace; color: #5d8a8a; font-size: 0.9rem; }
+.round-display { font-family: 'Share Tech Mono', monospace; color: #b89040; }
 .actions { display: flex; gap: 10px; align-items: center; }
 .start-btn {
-  background: linear-gradient(135deg, #e94560, #d63b55);
-  color: white; border: 1px solid #e94560; padding: 5px 12px;
+  background: linear-gradient(135deg, #c05550, #a84a42);
+  color: white; border: 1px solid #c05550; padding: 5px 12px;
   font-weight: bold; cursor: pointer; border-radius: 6px;
-  box-shadow: 0 2px 10px rgba(233,69,96,0.18);
+  box-shadow: 0 2px 10px rgba(192,85,80,0.18);
   transition: all 0.2s; font-family: 'Zen Maru Gothic', sans-serif;
 }
 .start-btn:hover {
-  background: linear-gradient(135deg, #f05070, #e94560);
-  box-shadow: 0 4px 16px rgba(233,69,96,0.28);
+  background: linear-gradient(135deg, #cf6058, #c05550);
+  box-shadow: 0 4px 16px rgba(192,85,80,0.28);
   transform: translateY(-1px);
 }
 .start-btn:active { transform: translateY(0) scale(0.97); }
 .start-btn:disabled {
-  background: #d0ccd8; border-color: #d0ccd8; color: #a09cae;
+  background: #ccc8bc; border-color: #ccc8bc; color: #a09c90;
   cursor: not-allowed; box-shadow: none; transform: none;
 }
 .ready-btn {
-  background: transparent; color: #c49030; border: 1px solid #c49030;
+  background: transparent; color: #b89040; border: 1px solid #b89040;
   padding: 5px 12px; font-weight: bold; cursor: pointer;
   border-radius: 6px; transition: all 0.2s;
-  box-shadow: 0 1px 6px rgba(196,144,48,0.08);
+  box-shadow: 0 1px 6px rgba(184,144,64,0.08);
   font-family: 'Zen Maru Gothic', sans-serif;
 }
 .ready-btn:hover {
-  background: rgba(196,144,48,0.08);
-  box-shadow: 0 2px 12px rgba(196,144,48,0.16);
+  background: rgba(184,144,64,0.08);
+  box-shadow: 0 2px 12px rgba(184,144,64,0.16);
   transform: translateY(-1px);
 }
 .ready-btn:active { transform: translateY(0) scale(0.97); }
 .ready-btn.is-ready {
-  background: rgba(8,145,178,0.08); color: #0891b2; border-color: #0891b2;
-  box-shadow: 0 2px 10px rgba(8,145,178,0.10);
+  background: rgba(93,138,138,0.08); color: #5d8a8a; border-color: #5d8a8a;
+  box-shadow: 0 2px 10px rgba(93,138,138,0.10);
 }
 .ready-btn.is-ready:hover {
-  background: rgba(8,145,178,0.14);
-  box-shadow: 0 4px 16px rgba(8,145,178,0.18);
+  background: rgba(93,138,138,0.14);
+  box-shadow: 0 4px 16px rgba(93,138,138,0.18);
 }
 .icon-btn {
   background: none; border: none; font-size: 1.4rem; cursor: pointer;
   filter: none; transition: transform 0.15s, filter 0.15s;
 }
-.icon-btn:hover { transform: scale(1.15); filter: drop-shadow(0 0 4px rgba(8,145,178,0.25)); }
+.icon-btn:hover { transform: scale(1.15); filter: drop-shadow(0 0 4px rgba(93,138,138,0.25)); }
 .icon-btn:active { transform: scale(0.95); }
 
 /* 歌牌棋盘 */
@@ -954,16 +955,19 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
   flex: 1; min-height: 0;
   display: grid; grid-template-columns: repeat(4, auto); grid-template-rows: repeat(4, minmax(0, 1fr));
   justify-content: center; gap: 12px 24px; padding: 15px;
-  background: radial-gradient(ellipse at center, #eae6f4 0%, #e4e0ee 100%);
+  background:
+    repeating-linear-gradient(45deg, transparent, transparent 20px, rgba(93,138,138,0.02) 20px, rgba(93,138,138,0.02) 21px),
+    repeating-linear-gradient(-45deg, transparent, transparent 20px, rgba(93,138,138,0.02) 20px, rgba(93,138,138,0.02) 21px),
+    radial-gradient(ellipse at center, #e8e5dc 0%, #e2dfd6 100%);
 }
 .karuta-card {
   aspect-ratio: 2 / 3; height: 100%;
-  border: 1.5px solid #b8b0cc;
-  background: linear-gradient(170deg, #2a3f6e, #1c2d52);
+  border: 1.5px solid #c0baa8;
+  background: linear-gradient(170deg, #3a4058, #2c3044);
   border-radius: 6px;
   display: flex; justify-content: center; align-items: center;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(28,37,65,0.18), inset 0 1px 0 rgba(255,255,255,0.05);
+  box-shadow: 0 2px 8px rgba(44,48,68,0.18), inset 0 1px 0 rgba(255,255,255,0.05);
   transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s, opacity 0.15s;
   overflow: hidden;
   position: relative;
@@ -971,17 +975,17 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 .karuta-card::before {
   content: '';
   position: absolute; top: 0; left: 0; right: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(8,145,178,0.25), transparent);
+  background: linear-gradient(90deg, transparent, rgba(93,138,138,0.25), transparent);
 }
 .karuta-card:hover {
-  border-color: #0891b2;
-  box-shadow: 0 4px 18px rgba(8,145,178,0.20), inset 0 1px 0 rgba(255,255,255,0.08);
+  border-color: #5d8a8a;
+  box-shadow: 0 4px 18px rgba(93,138,138,0.20), inset 0 1px 0 rgba(255,255,255,0.08);
   transform: translateY(-3px);
 }
 .karuta-card:active {
   transform: translateY(0) scale(0.96);
-  box-shadow: 0 1px 4px rgba(28,37,65,0.2);
-  border-color: #e94560;
+  box-shadow: 0 1px 4px rgba(44,48,68,0.2);
+  border-color: #c05550;
 }
 .karuta-card.card-hidden { visibility: hidden; }
 .karuta-card.card-frozen {
@@ -990,15 +994,15 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
   cursor: not-allowed;
   pointer-events: none;
   transform: none !important;
-  box-shadow: 0 1px 4px rgba(28,37,65,0.10) !important;
-  border-color: #b8b0cc !important;
+  box-shadow: 0 1px 4px rgba(44,48,68,0.10) !important;
+  border-color: #c0baa8 !important;
 }
 .card-text {
   writing-mode: vertical-rl; text-orientation: upright;
   letter-spacing: 2px; font-size: clamp(0.9rem, 1.5vh, 1.2rem);
   font-weight: 600; text-align: center; padding: 5px;
-  color: #e0dce8;
-  text-shadow: 0 0 6px rgba(8,145,178,0.10);
+  color: #ddd9ce;
+  text-shadow: 0 0 6px rgba(93,138,138,0.10);
 }
 
 /* ==========================================
@@ -1008,7 +1012,7 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
   grid-template-columns: repeat(4, auto); grid-template-rows: repeat(4, minmax(0, 1fr));
 }
 .touhou-card {
-  background: #1a1a2e !important;
+  background: #2c3044 !important;
   overflow: hidden;
   position: relative;
 }
@@ -1033,35 +1037,35 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 }
 
 /* 聊天区 */
-.chat-area { height: 120px; border-top: 1px solid #e8e4f0; display: flex; flex-direction: column; background: #faf9fc; }
-.chat-history { flex: 1; padding: 8px 15px; overflow-y: auto; font-size: 0.83rem; color: #7c7f9a; }
+.chat-area { height: 120px; border-top: 1px solid #e2ded4; display: flex; flex-direction: column; background: #f5f2ea; }
+.chat-history { flex: 1; padding: 8px 15px; overflow-y: auto; font-size: 0.83rem; color: #8a857a; }
 .chat-line { margin-bottom: 4px; }
-.chat-input-box { display: flex; border-top: 1px solid #ece8f4; }
+.chat-input-box { display: flex; border-top: 1px solid #e6e2d8; }
 .chat-input-box input {
   flex: 1; border: none; padding: 10px 15px; font-size: 0.95rem; outline: none;
-  background: #ffffff; color: #1a1a2e;
+  background: #faf8f2; color: #3a3530;
   font-family: 'Zen Maru Gothic', sans-serif;
 }
-.chat-input-box input::placeholder { color: #b0adc0; }
-.chat-input-box input:focus { background: #f8f6ff; }
+.chat-input-box input::placeholder { color: #b0ab9e; }
+.chat-input-box input:focus { background: #f5f2ea; }
 
 /* 结算弹窗 */
 .result-box { max-width: 450px; text-align: center; }
-.result-box h2 { font-size: 1.6rem; color: #c49030; }
+.result-box h2 { font-size: 1.6rem; color: #b89040; }
 .result-podium { margin: 20px 0; }
 .podium-item {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 10px 15px; border-bottom: 1px dashed #e8e4f0;
-  font-size: 1.05rem; font-weight: bold; color: #3a3a50;
+  padding: 10px 15px; border-bottom: 1px dashed #e2ded4;
+  font-size: 1.05rem; font-weight: bold; color: #4a4640;
 }
 .podium-item:last-child { border-bottom: none; }
 .podium-rank { font-size: 1.4rem; min-width: 36px; }
 .podium-name { flex: 1; text-align: left; margin-left: 8px; }
-.podium-score { color: #0891b2; min-width: 70px; text-align: right; font-family: 'Share Tech Mono', monospace; }
+.podium-score { color: #5d8a8a; min-width: 70px; text-align: right; font-family: 'Share Tech Mono', monospace; }
 .result-self {
-  border: 1px solid #e8e4f0; padding: 12px 15px; margin: 15px 0;
+  border: 1px solid #e2ded4; padding: 12px 15px; margin: 15px 0;
   display: flex; justify-content: space-between; font-weight: bold; font-size: 1rem;
-  background: #faf9fc; color: #3a3a50; border-radius: 6px;
+  background: #f5f2ea; color: #4a4640; border-radius: 6px;
 }
 .result-actions { display: flex; gap: 12px; margin-top: 15px; }
 .result-actions .btn-primary, .result-actions .btn-secondary { flex: 1; padding: 12px; font-size: 1rem; }
@@ -1072,9 +1076,9 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 @media (max-width: 768px) {
   .game-wrapper { padding: 0; }
   .game-layout { border: none; flex-direction: column; border-radius: 0; }
-  .sidebar { width: 100%; border-right: none; border-bottom: 1px solid #e8e4f0; flex-direction: row; justify-content: space-between; align-items: stretch; }
-  .player-list { display: flex; overflow-x: auto; flex: 1; border-right: 1px dashed #e8e4f0; }
-  .player-item { border-bottom: none; border-right: 1px solid #ece8f4; padding: 10px; flex-direction: column; justify-content: center; align-items: center; min-width: 70px; }
+  .sidebar { width: 100%; border-right: none; border-bottom: 1px solid #e2ded4; flex-direction: row; justify-content: space-between; align-items: stretch; }
+  .player-list { display: flex; overflow-x: auto; flex: 1; border-right: 1px dashed #e2ded4; }
+  .player-item { border-bottom: none; border-right: 1px solid #e6e2d8; padding: 10px; flex-direction: column; justify-content: center; align-items: center; min-width: 70px; }
   .p-name { font-size: 0.8rem; }
   .p-score { font-size: 0.9rem; }
   .sidebar-bottom { border-top: none; flex-direction: column; justify-content: center; min-width: 100px; }
@@ -1082,7 +1086,7 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
   .room-info { border-top: none; padding: 2px; font-size: 0.8rem; }
   .top-bar { padding: 8px 10px; font-size: 0.9rem; }
   .karuta-board { gap: 6px; padding: 6px; }
-  .karuta-card { box-shadow: 0 1px 4px rgba(28,37,65,0.15); }
+  .karuta-card { box-shadow: 0 1px 4px rgba(44,48,68,0.15); }
   .card-text { letter-spacing: 0px; }
   .chat-area { height: 100px; }
 }
