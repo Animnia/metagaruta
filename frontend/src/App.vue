@@ -11,7 +11,10 @@ interface Card {
   id: string, 
   titleOriginal: string, 
   titleTranslation: string, 
-  isMatched: boolean 
+  isMatched: boolean,
+  characterId?: number,
+  characterName?: string,
+  pictureUrl?: string
 }
 
 const audioPlayer = ref<HTMLAudioElement | null>(null)
@@ -33,6 +36,7 @@ const currentView = ref('home')
 // 用户在输入框里填的数据
 const inputName = ref('')
 const inputRoomId = ref('')
+const selectedGameMode = ref<'vocaloid' | 'touhou'>('vocaloid') // 创建房间时选择的游戏模式
 
 // 玩家的内部唯一 ID (保持随机生成即可)
 const myPlayerId = 'user_' + Math.floor(Math.random() * 10000)
@@ -61,6 +65,7 @@ const hasAnswered = ref(false)
 const showRules = ref(false)
 const showSettings = ref(false)
 const displayMode = ref('original')
+const roomGameMode = ref('vocaloid') // 当前房间的实际游戏模式 (从服务器获取)
 
 // 房主与准备状态
 const ownerId = ref('')
@@ -109,11 +114,17 @@ const handleWsMessage = (event: MessageEvent) => {
   const data = JSON.parse(event.data)
   if (data.type === 'room_created') {
     inputRoomId.value = data.payload.roomId
+    if (data.payload.gameMode) {
+      roomGameMode.value = data.payload.gameMode
+    }
   }
   else if (data.type === 'room_state_update') {
     players.value = data.payload.players
     if (data.payload.ownerId) {
       ownerId.value = data.payload.ownerId
+    }
+    if (data.payload.gameMode) {
+      roomGameMode.value = data.payload.gameMode
     }
   } 
   else if (data.type === 'chat_receive') {
@@ -304,7 +315,8 @@ const createGame = () => {
     type: 'create_room',
     payload: {
       playerName: inputName.value.trim(),
-      playerId: myPlayerId
+      playerId: myPlayerId,
+      gameMode: selectedGameMode.value
     }
   })
 }
@@ -405,6 +417,7 @@ const leaveRoom = () => {
   chatLogs.value = ['系统: 欢迎来到metagaruta！']
   hasAnswered.value = false
   ownerId.value = ''
+  roomGameMode.value = 'vocaloid'
   audioStatusText.value = '🔊 等待开始...'
   inputRoomId.value = ''
   currentView.value = 'home'
@@ -426,6 +439,18 @@ const leaveRoom = () => {
       <div class="form-group">
         <label>房间号</label>
         <input v-model="inputRoomId" type="text" placeholder="例如: 8848" @keyup.enter="joinGame" />
+      </div>
+
+      <div class="form-group">
+        <label>游戏模式 (创建房间时生效)</label>
+        <div class="mode-selector">
+          <button class="mode-btn" :class="{ active: selectedGameMode === 'vocaloid' }" @click="selectedGameMode = 'vocaloid'">
+            🎵 Vocaloid
+          </button>
+          <button class="mode-btn" :class="{ active: selectedGameMode === 'touhou' }" @click="selectedGameMode = 'touhou'">
+            🌸 东方 Project
+          </button>
+        </div>
       </div>
 
       <div class="btn-group">
@@ -452,6 +477,7 @@ const leaveRoom = () => {
         <div class="sidebar-bottom">
           <button class="no-song-btn" :class="{ 'disabled': hasAnswered || gameState !== 'playing' }" @click="handleNoSongClick">没有这首歌</button>
           <div class="room-info">房间号: <strong>{{ inputRoomId }}</strong></div>
+          <div class="room-mode-tag" :class="roomGameMode">{{ roomGameMode === 'touhou' ? '🌸 东方' : '🎵 Vocaloid' }}</div>
         </div>
       </aside>
 
@@ -473,9 +499,17 @@ const leaveRoom = () => {
           </div>
         </header>
 
-        <div class="karuta-board">
-          <div v-for="card in cards" :key="card.id" class="karuta-card" :class="{ 'card-hidden': card.isMatched }" @click="handleCardClick(card)">
-            <span class="card-text">{{ displayMode === 'original' ? card.titleOriginal : card.titleTranslation }}</span>
+        <div class="karuta-board" :class="{ 'touhou-board': roomGameMode === 'touhou' }">
+          <div v-for="card in cards" :key="card.id" class="karuta-card" :class="{ 'card-hidden': card.isMatched, 'touhou-card': roomGameMode === 'touhou' }" @click="handleCardClick(card)">
+            <!-- Touhou 模式: 显示角色图片 -->
+            <template v-if="roomGameMode === 'touhou'">
+              <img :src="card.pictureUrl" class="card-picture" alt="" />
+              <span class="card-name-overlay">{{ card.characterName }}</span>
+            </template>
+            <!-- Vocaloid 模式: 显示歌曲名称 -->
+            <template v-else>
+              <span class="card-text">{{ displayMode === 'original' ? card.titleOriginal : card.titleTranslation }}</span>
+            </template>
           </div>
         </div>
 
@@ -636,6 +670,22 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 }
 .form-group input::placeholder { color: #b0adc0; }
 
+/* 游戏模式选择器 */
+.mode-selector {
+  display: flex; gap: 10px;
+}
+.mode-btn {
+  flex: 1; padding: 10px 8px; font-size: 0.95rem; font-weight: bold;
+  border: 2px solid #d4d0e0; background: #faf9fc; color: #7c7f9a;
+  cursor: pointer; border-radius: 6px; transition: all 0.2s;
+  font-family: 'Zen Maru Gothic', sans-serif;
+}
+.mode-btn:hover { border-color: #0891b2; color: #0891b2; background: rgba(8,145,178,0.04); }
+.mode-btn.active {
+  border-color: #0891b2; color: #0891b2; background: rgba(8,145,178,0.08);
+  box-shadow: 0 0 0 3px rgba(8,145,178,0.12);
+}
+
 .btn-group { display: flex; flex-direction: column; gap: 15px; margin-top: 30px; }
 .btn-primary, .btn-secondary {
   padding: 12px; font-size: 1.05rem; font-weight: bold;
@@ -751,6 +801,14 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 }
 .room-info strong { color: #c49030; }
 
+/* 房间模式标签 */
+.room-mode-tag {
+  padding: 4px 0; text-align: center; font-size: 0.8rem; font-weight: bold;
+  font-family: 'Share Tech Mono', monospace; letter-spacing: 1px;
+}
+.room-mode-tag.vocaloid { color: #0891b2; background: rgba(8,145,178,0.06); }
+.room-mode-tag.touhou { color: #e94560; background: rgba(233,69,96,0.06); }
+
 /* 主区域 */
 .main-area { flex: 1; display: flex; flex-direction: column; min-width: 0; background: #ffffff; }
 .top-bar {
@@ -848,6 +906,37 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
   font-weight: 600; text-align: center; padding: 5px;
   color: #e0dce8;
   text-shadow: 0 0 6px rgba(8,145,178,0.10);
+}
+
+/* ==========================================
+   Touhou 模式歌牌
+   ========================================== */
+.touhou-board {
+  grid-template-columns: repeat(4, auto); grid-template-rows: repeat(4, minmax(0, 1fr));
+}
+.touhou-card {
+  background: #1a1a2e !important;
+  overflow: hidden;
+  position: relative;
+}
+.touhou-card .card-picture {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  position: absolute; top: 0; left: 0;
+  transition: transform 0.2s;
+}
+.touhou-card:hover .card-picture {
+  transform: scale(1.05);
+}
+.touhou-card .card-name-overlay {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: linear-gradient(transparent, rgba(0,0,0,0.75));
+  color: #fff; text-align: center;
+  padding: 6px 4px 4px;
+  font-size: clamp(0.7rem, 1.2vh, 0.9rem); font-weight: 700;
+  letter-spacing: 1px; z-index: 1;
+  writing-mode: horizontal-tb;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.6);
 }
 
 /* 聊天区 */
