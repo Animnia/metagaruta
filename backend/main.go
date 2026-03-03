@@ -13,17 +13,12 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// ==========================================
-// 1. 数据结构定义
-// ==========================================
-
-// Player 代表一个玩家
 type Player struct {
 	ID          string          `json:"id"`
 	Name        string          `json:"name"`
 	Score       int             `json:"score"`
-	HasAnswered bool            `json:"hasAnswered"` // 本局是否已点过牌
-	GameReady   bool            `json:"gameReady"`   // 游戏开始前的准备状态
+	HasAnswered bool            `json:"hasAnswered"`
+	GameReady   bool            `json:"gameReady"`
 	IsReady     bool            `json:"-"`
 	Conn        *websocket.Conn `json:"-"`
 }
@@ -33,64 +28,56 @@ type Song struct {
 	TitleOriginal    string `json:"title_original"`
 	TitleTranslation string `json:"title_translation"`
 	Duration         int    `json:"duration"`
-	CharacterID      int    `json:"-"` // touhou 模式: 角色数字 ID，用于定位音频路径
-	CharacterName    string `json:"-"` // touhou 模式: 角色名称
+	CharacterID      int    `json:"-"` // touhou
+	CharacterName    string `json:"-"` // touhou
 }
 
-// TouhouCharacter 东方角色数据 (从 touhou/data/data.json 加载)
 type TouhouCharacter struct {
 	ID         int            `json:"id"`
 	Character  string         `json:"character"`
 	MusicCount int            `json:"music_count"`
-	Data       map[string]int `json:"data"` // songId -> duration(秒)
+	Data       map[string]int `json:"data"` // songId -> duration
 }
 
 type Card struct {
 	ID               string `json:"id"`
-	TitleOriginal    string `json:"titleOriginal"` // 转成驼峰命名给前端 Vue 用
+	TitleOriginal    string `json:"titleOriginal"`
 	TitleTranslation string `json:"titleTranslation"`
 	IsMatched        bool   `json:"isMatched"`
-	CharacterID      int    `json:"characterId,omitempty"`   // touhou 模式: 角色 ID
-	CharacterName    string `json:"characterName,omitempty"` // touhou 模式: 角色名称
-	PictureUrl       string `json:"pictureUrl,omitempty"`    // touhou 模式: 角色图片 URL
+	CharacterID      int    `json:"characterId,omitempty"`   // touhou
+	CharacterName    string `json:"characterName,omitempty"` // touhou
+	PictureUrl       string `json:"pictureUrl,omitempty"`    // touhou
 }
 
-// Room 代表一个游戏房间
 type Room struct {
 	ID       string
 	OwnerID  string
-	GameMode string // "vocaloid" 或 "touhou"
+	GameMode string
 	Players  map[string]*Player
 	Mutex    sync.Mutex
 
-	// --- 新增的游戏状态 ---
-	State            string        `json:"state"` // "waiting"(等待中), "playing"(游戏中)
+	State            string        `json:"state"`
 	CurrentRound     int           `json:"currentRound"`
-	SongPool         []Song        `json:"-"` // 本局抽出的 25 首题库 (不需要发给前端，防作弊)
-	BoardCards       []Card        `json:"-"` // 场上的 16 张歌牌
-	CurrentSong      *Song         `json:"-"` // 当前正在播放的歌
-	CurrentSongIndex int           `json:"-"` // 记住当前歌在题库里的位置，方便等会儿移除
-	RoundState       string        `json:"-"` // 新增：记录回合状态 ("preparing" 或 "playing")
-	TimerCancel      chan struct{} `json:"-"` // 新增：用于打断 5 秒强制开局的定时器
-	NoSongCorrect    bool          `json:"-"` // 本回合是否有人正确识别了幽灵歌曲
+	SongPool         []Song        `json:"-"`
+	BoardCards       []Card        `json:"-"`
+	CurrentSong      *Song         `json:"-"`
+	CurrentSongIndex int           `json:"-"`
+	RoundState       string        `json:"-"`
+	TimerCancel      chan struct{} `json:"-"`
+	NoSongCorrect    bool          `json:"-"`
 }
 
-// WsMessage 是前后端通信的统一 JSON 格式
+// 统一 JSON 格式
 type WsMessage struct {
 	Type    string                 `json:"type"`
 	Payload map[string]interface{} `json:"payload"`
 }
-
-// ==========================================
-// 2. 全局状态
-// ==========================================
 
 // 全局题库
 var globalSongs []Song
 var globalTouhouChars []TouhouCharacter
 
 var (
-	// rooms 存放所有的房间，key 是房间号
 	rooms = make(map[string]*Room)
 	// globalMutex 保护对 rooms map 的并发读写
 	globalMutex = sync.Mutex{}
@@ -100,23 +87,19 @@ var (
 	}
 )
 
-// ==========================================
-// 3. 核心逻辑
-// ==========================================
-
 func main() {
-	loadSongs()       // 载入 vocaloid 题库
-	loadTouhouChars() // 载入 touhou 题库
+	loadSongs()
+	loadTouhouChars()
 	http.HandleFunc("/ws", handleConnections)
-	http.HandleFunc("/api/audio", handleAudioProxy)     // 音频接口
-	http.HandleFunc("/api/picture", handlePictureProxy) // touhou 角色图片接口
+	http.HandleFunc("/api/audio", handleAudioProxy)
+	http.HandleFunc("/api/picture", handlePictureProxy)
 	fmt.Println("---------------------------------------")
 	fmt.Println("歌牌游戏裁判服务器已启动 :3000/ws")
 	fmt.Println("---------------------------------------")
 	http.ListenAndServe(":3000", nil)
 }
 
-// 处理音频请求 (防 F12 作弊接口)
+// 处理音频请求
 func handleAudioProxy(w http.ResponseWriter, r *http.Request) {
 	roomID := r.URL.Query().Get("roomId")
 
@@ -124,13 +107,11 @@ func handleAudioProxy(w http.ResponseWriter, r *http.Request) {
 	room, exists := rooms[roomID]
 	globalMutex.Unlock()
 
-	// 如果房间不存在，或者当前回合还没有选定歌曲，拒绝请求
 	if !exists || room.CurrentSong == nil {
 		http.Error(w, "找不到歌曲或游戏未开始", http.StatusNotFound)
 		return
 	}
 
-	// 根据游戏模式构造音频文件路径
 	var audioPath string
 	var contentType string
 	if room.GameMode == "touhou" {
@@ -153,15 +134,14 @@ func handleAudioProxy(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Printf("正在发送音频文件: %s\n", audioPath)
 
-	// 设置 Header，严禁浏览器缓存这首歌！防止玩家通过缓存提前知道答案
+	// 设置 Header，禁浏览器缓存
 	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
 	w.Header().Set("Content-Type", contentType)
 
-	// 将音频文件流直接返回给前端
+	// 音频文件流返回给前端
 	http.ServeFile(w, r, audioPath)
 }
 
-// 处理 touhou 角色图片请求
 func handlePictureProxy(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	if id == "" {
@@ -173,12 +153,11 @@ func handlePictureProxy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "图片不存在", http.StatusNotFound)
 		return
 	}
-	w.Header().Set("Cache-Control", "public, max-age=86400") // 图片可以缓存
+	w.Header().Set("Cache-Control", "public, max-age=86400")
 	w.Header().Set("Content-Type", "image/jpeg")
 	http.ServeFile(w, r, picPath)
 }
 
-// 启动时加载 vocaloid 题库
 func loadSongs() {
 	file, err := os.ReadFile("vocaloid/data/songs.json")
 	if err != nil {
@@ -189,7 +168,6 @@ func loadSongs() {
 	fmt.Printf("成功加载 %d 首 Vocaloid 歌曲到全局题库\n", len(globalSongs))
 }
 
-// 启动时加载 touhou 角色/音乐题库
 func loadTouhouChars() {
 	file, err := os.ReadFile("touhou/data/data.json")
 	if err != nil {
@@ -204,7 +182,7 @@ func loadTouhouChars() {
 	fmt.Printf("成功加载 %d 个东方角色到全局题库\n", len(globalTouhouChars))
 }
 
-// 生成唯一的 4 位数字房间号 (调用前必须持有 globalMutex)
+// 持有 globalMutex
 func generateRoomID() string {
 	for {
 		id := fmt.Sprintf("%04d", rand.Intn(10000))
@@ -214,7 +192,6 @@ func generateRoomID() string {
 	}
 }
 
-// 洗牌并初始化游戏
 func initGame(room *Room) {
 	room.Mutex.Lock()
 	defer room.Mutex.Unlock()
@@ -229,9 +206,7 @@ func initGame(room *Room) {
 	}
 }
 
-// Vocaloid 模式初始化（原有逻辑）
 func initVocaloidGame(room *Room) {
-	// 1. 打乱全局题库，抽取 25 首作为本房间的题库
 	rand.Seed(time.Now().UnixNano())
 	shuffledAll := make([]Song, len(globalSongs))
 	copy(shuffledAll, globalSongs)
@@ -245,7 +220,6 @@ func initVocaloidGame(room *Room) {
 	}
 	room.SongPool = shuffledAll[:poolSize]
 
-	// 2. 从这 25 首歌里，再抽取前 16 首生成“歌牌”
 	cardSize := 16
 	if poolSize < 16 {
 		cardSize = poolSize
@@ -261,7 +235,6 @@ func initVocaloidGame(room *Room) {
 		}
 	}
 
-	// 3. 将 16 张牌再次乱序
 	rand.Shuffle(len(room.BoardCards), func(i, j int) {
 		room.BoardCards[i], room.BoardCards[j] = room.BoardCards[j], room.BoardCards[i]
 	})
@@ -269,11 +242,9 @@ func initVocaloidGame(room *Room) {
 	fmt.Printf("房间 [%s] Vocaloid 游戏初始化完成，生成 %d 张牌\n", room.ID, cardSize)
 }
 
-// Touhou 模式初始化
 func initTouhouGame(room *Room) {
 	rand.Seed(time.Now().UnixNano())
 
-	// 1. 打乱全部 113 个角色，抽取 25 个
 	shuffledChars := make([]TouhouCharacter, len(globalTouhouChars))
 	copy(shuffledChars, globalTouhouChars)
 	rand.Shuffle(len(shuffledChars), func(i, j int) {
@@ -286,10 +257,8 @@ func initTouhouGame(room *Room) {
 	}
 	selectedChars := shuffledChars[:poolSize]
 
-	// 2. 每个角色随机抽取 1 首曲子，组成 25 首歌的题库
 	room.SongPool = make([]Song, poolSize)
 	for i, char := range selectedChars {
-		// 从角色的 Data map 中随机抽一首
 		keys := make([]string, 0, len(char.Data))
 		for k := range char.Data {
 			keys = append(keys, k)
@@ -299,7 +268,7 @@ func initTouhouGame(room *Room) {
 
 		room.SongPool[i] = Song{
 			ID:               songID,
-			TitleOriginal:    char.Character, // 用角色名称作为“歌曲名”，便于结算显示
+			TitleOriginal:    char.Character,
 			TitleTranslation: char.Character,
 			Duration:         duration,
 			CharacterID:      char.ID,
@@ -307,7 +276,6 @@ func initTouhouGame(room *Room) {
 		}
 	}
 
-	// 3. 前 16 首对应的 16 个角色生成歌牌（印角色图片）
 	cardSize := 16
 	if poolSize < 16 {
 		cardSize = poolSize
@@ -324,7 +292,6 @@ func initTouhouGame(room *Room) {
 		}
 	}
 
-	// 4. 将 16 张牌乱序
 	rand.Shuffle(len(room.BoardCards), func(i, j int) {
 		room.BoardCards[i], room.BoardCards[j] = room.BoardCards[j], room.BoardCards[i]
 	})
@@ -334,7 +301,6 @@ func initTouhouGame(room *Room) {
 
 // 阶段一：开始新一回合，发送“准备”指令
 func startRound(room *Room) {
-	// 在这里统一加上锁
 	room.Mutex.Lock()
 	defer room.Mutex.Unlock()
 
@@ -349,9 +315,8 @@ func startRound(room *Room) {
 		p.HasAnswered = false
 		p.IsReady = false
 	}
-	room.NoSongCorrect = false // 重置幽灵歌曲正确标记
+	room.NoSongCorrect = false
 
-	// 检查场上是否还有未消除的牌。如果全消除了，游戏结束！
 	matchedCount := 0
 	for _, c := range room.BoardCards {
 		if c.IsMatched {
@@ -365,16 +330,15 @@ func startRound(room *Room) {
 			pList = append(pList, *p)
 		}
 		overMsg := WsMessage{Type: "game_over", Payload: map[string]interface{}{"players": pList}}
-		broadcastToRoom(room, overMsg) // 通知所有人结束
+		broadcastToRoom(room, overMsg)
 		room.RoundState = "ended"
 		return
 	}
 
 	if len(room.SongPool) == 0 {
-		return // 理论上不会空，加个安全底线
+		return
 	}
 
-	// 每一轮都从剩余的题库中【随机】抽一首
 	room.CurrentSongIndex = rand.Intn(len(room.SongPool))
 	targetSong := room.SongPool[room.CurrentSongIndex]
 	room.CurrentSong = &targetSong
@@ -385,7 +349,6 @@ func startRound(room *Room) {
 	}
 	startTime := rand.Intn(maxStart)
 
-	// 计算本回合的实际播放时长 (最多90秒，或者剩余不足90秒时取真实值)
 	playDuration := targetSong.Duration - startTime
 	if playDuration > 90 {
 		playDuration = 90
@@ -399,24 +362,21 @@ func startRound(room *Room) {
 		Payload: map[string]interface{}{
 			"round":        room.CurrentRound,
 			"startTime":    startTime,
-			"playDuration": playDuration, // 发给前端用于倒计时
+			"playDuration": playDuration,
 		},
 	}
 
-	// 因为当前已经在锁内部，绝对不能调用 broadcastToRoom（会再次造成死锁）
-	// 我们像 startCountdownAndPlay 那样，手动遍历发送
 	msgBytes, _ := json.Marshal(prepMsg)
 	for _, p := range room.Players {
 		p.Conn.WriteMessage(websocket.TextMessage, msgBytes)
 	}
 
-	// 5. 开启 5 秒防卡死倒计时。
 	room.TimerCancel = make(chan struct{})
 	go func(r *Room, roundNum int, cancelCh chan struct{}) {
 		select {
-		case <-time.After(5 * time.Second): // 5秒超时
+		case <-time.After(5 * time.Second):
 			startCountdownAndPlay(r, roundNum)
-		case <-cancelCh: // 所有人都提前准备好了
+		case <-cancelCh:
 			return
 		}
 	}(room, room.CurrentRound, room.TimerCancel)
@@ -429,20 +389,17 @@ func startCountdownAndPlay(room *Room, roundNum int) {
 		room.Mutex.Unlock()
 		return
 	}
-	room.RoundState = "countdown" // 🌟 进入新的倒计时状态
+	room.RoundState = "countdown"
 
-	// 告诉前端：可以开始打印 4-3-2-1 了
 	countdownMsg := WsMessage{Type: "countdown_start", Payload: map[string]interface{}{}}
 	cdBytes, _ := json.Marshal(countdownMsg)
 	for _, p := range room.Players {
 		p.Conn.WriteMessage(websocket.TextMessage, cdBytes)
 	}
-	room.Mutex.Unlock() // 必须先解锁，因为我们要睡 4 秒！
+	room.Mutex.Unlock() // 必须先解锁，因为我们要睡 4 秒
 
-	// 服务端严格等待 4 秒
 	time.Sleep(4 * time.Second)
 
-	// 4 秒后，正式下达播放指令
 	room.Mutex.Lock()
 	if room.RoundState != "countdown" || room.CurrentRound != roundNum {
 		room.Mutex.Unlock()
@@ -458,7 +415,6 @@ func startCountdownAndPlay(room *Room, roundNum int) {
 		p.Conn.WriteMessage(websocket.TextMessage, msgBytes)
 	}
 
-	// 开启 90 秒回合倒计时
 	room.TimerCancel = make(chan struct{})
 	go func(r *Room, roundNum int, cancelCh chan struct{}) {
 		select {
@@ -466,7 +422,6 @@ func startCountdownAndPlay(room *Room, roundNum int) {
 			r.Mutex.Lock()
 			defer r.Mutex.Unlock()
 			if r.RoundState == "playing" && r.CurrentRound == roundNum {
-				// 超时无人答对，不展示答案
 				endRound(r, "时间到！无人答对。", !isSongOnBoard(r), false)
 			}
 		case <-cancelCh:
@@ -497,11 +452,10 @@ func isAllAnswered(room *Room) bool {
 }
 
 // 结束本回合，等待几秒后自动开启下一回合
-// 注意：调用此函数时，必须已经加了 room.Mutex.Lock()！
+// 注意：调用此函数时，必须已经加了 room.Mutex.Lock()
 func endRound(room *Room, reason string, removeSong bool, showAnswer bool) {
 	room.RoundState = "ended"
 
-	// 1. 打断 90 秒倒计时
 	if room.TimerCancel != nil {
 		close(room.TimerCancel)
 		room.TimerCancel = nil
@@ -510,13 +464,11 @@ func endRound(room *Room, reason string, removeSong bool, showAnswer bool) {
 	if removeSong {
 		idx := room.CurrentSongIndex
 		if idx >= 0 && idx < len(room.SongPool) {
-			// Go 语言中删除切片元素的经典写法
 			room.SongPool = append(room.SongPool[:idx], room.SongPool[idx+1:]...)
-			fmt.Printf("🎵 歌曲已被移出题库，剩余 %d 首\n", len(room.SongPool))
+			fmt.Printf("歌曲已被移出题库，剩余 %d 首\n", len(room.SongPool))
 		}
 	}
 
-	// 检查场上 16 张牌是否已经全部被消除
 	matchedCount := 0
 	for _, c := range room.BoardCards {
 		if c.IsMatched {
@@ -527,14 +479,13 @@ func endRound(room *Room, reason string, removeSong bool, showAnswer bool) {
 
 	fmt.Printf("房间 [%s] 第 %d 局结束。原因: %s\n", room.ID, room.CurrentRound, reason)
 
-	// 2. 告诉所有人本局结束，公布正确答案
 	endMsg := WsMessage{
 		Type: "round_end",
 		Payload: map[string]interface{}{
 			"reason":      reason,
 			"correctSong": room.CurrentSong.TitleOriginal,
-			"cards":       room.BoardCards, // 发送最新的卡牌状态（包含被消除的牌）
-			"showAnswer":  showAnswer,      // 传给前端，决定是否打印答案
+			"cards":       room.BoardCards,
+			"showAnswer":  showAnswer,
 		},
 	}
 	msgBytes, _ := json.Marshal(endMsg)
@@ -592,8 +543,8 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		if currentRoom != nil && currentPlayer != nil {
 			currentRoom.Mutex.Lock()
 			delete(currentRoom.Players, currentPlayer.ID)
-			isEmpty := len(currentRoom.Players) == 0 // 检查房间是否空了
-			// 如果离开的是房主且房间还有人，转移房主身份
+			isEmpty := len(currentRoom.Players) == 0
+			// 转移房主身份
 			if !isEmpty && currentRoom.OwnerID == currentPlayer.ID {
 				for _, p := range currentRoom.Players {
 					currentRoom.OwnerID = p.ID
@@ -605,36 +556,32 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			fmt.Printf("玩家 [%s] 离开了房间 [%s]\n", currentPlayer.Name, currentRoom.ID)
 
 			if isEmpty {
-				// 如果房间空无一人，销毁该房间，防止“幽灵循环”
 				globalMutex.Lock()
 				delete(rooms, currentRoom.ID)
 				globalMutex.Unlock()
 
 				currentRoom.Mutex.Lock()
-				currentRoom.RoundState = "ended" // 强行把状态设为结束
+				currentRoom.RoundState = "ended"
 				if currentRoom.TimerCancel != nil {
-					close(currentRoom.TimerCancel) // 打断可能正在进行的 5 秒或 90 秒倒计时
+					close(currentRoom.TimerCancel)
 					currentRoom.TimerCancel = nil
 				}
 				currentRoom.Mutex.Unlock()
 				fmt.Printf("房间 [%s] 已空，销毁房间并释放资源\n", currentRoom.ID)
 			} else {
-				// 还有人在，广播最新列表
 				broadcastRoomState(currentRoom)
 			}
 		}
 		conn.Close()
 	}()
 
-	// 不断读取前端发来的消息
 	for {
 		_, msgBytes, err := conn.ReadMessage()
 		if err != nil {
 			fmt.Println("玩家断开连接/网络异常")
-			break // 退出循环，自动触发上面的 defer 清理逻辑
+			break
 		}
 
-		// 解析 JSON
 		var msg WsMessage
 		if err := json.Unmarshal(msgBytes, &msg); err != nil {
 			continue
@@ -645,7 +592,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		case "create_room":
 			playerName := msg.Payload["playerName"].(string)
 			playerID := msg.Payload["playerId"].(string)
-			gameMode := "vocaloid" // 默认模式
+			gameMode := "vocaloid"
 			if gm, ok := msg.Payload["gameMode"].(string); ok && gm != "" {
 				gameMode = gm
 			}
@@ -816,7 +763,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 				initGame(currentRoom)
 
-				// 告诉房间里所有人：游戏开始了！发牌！
 				startMsg := WsMessage{
 					Type: "game_started",
 					Payload: map[string]interface{}{
@@ -827,15 +773,12 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				}
 				broadcastToRoom(currentRoom, startMsg)
 
-				// 🌟 发牌完毕后，服务器主动发起第一回合的“准备播放”
 				startRound(currentRoom)
 			}
 
 		case "restart_game":
-			// 玩家个人选择"再来一局"：留在房间，回到等待界面
 			if currentRoom != nil && currentPlayer != nil {
 				currentRoom.Mutex.Lock()
-				// 如果房间还在 playing 状态，切回 waiting
 				if currentRoom.State != "waiting" {
 					currentRoom.State = "waiting"
 					currentRoom.CurrentRound = 1
@@ -869,12 +812,11 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				broadcastRoomState(currentRoom)
 			}
 
-		case "client_ready": // 🌟 新增：接收前端缓冲完毕的信号
+		case "client_ready":
 			if currentRoom != nil && currentRoom.RoundState == "preparing" {
 				currentRoom.Mutex.Lock()
 				currentPlayer.IsReady = true
 
-				// 检查房间里是不是所有人都 IsReady 了
 				allReady := true
 				for _, p := range currentRoom.Players {
 					if !p.IsReady {
@@ -883,7 +825,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 
-				// 如果都准备好了，立刻打断定时器并播放
 				if allReady {
 					if currentRoom.TimerCancel != nil {
 						close(currentRoom.TimerCancel)
@@ -898,18 +839,14 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 		case "buzz":
 			if currentRoom != nil {
-				currentRoom.Mutex.Lock() // 抢答锁：保证绝对公平，谁的网速快谁先进锁
+				currentRoom.Mutex.Lock() // 抢答锁
 
-				// 只有在游戏中且玩家没答过题才能抢答
 				if currentRoom.RoundState == "playing" && !currentPlayer.HasAnswered {
 					cardID := msg.Payload["cardId"].(string)
 					currentPlayer.HasAnswered = true
 
-					// 判定对错
 					if cardID == currentRoom.CurrentSong.ID {
-						// 答对了！
 						currentPlayer.Score += 10
-						// 消除这张卡牌
 						for i, c := range currentRoom.BoardCards {
 							if c.ID == cardID {
 								currentRoom.BoardCards[i].IsMatched = true
@@ -918,20 +855,16 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 						}
 						endRound(currentRoom, fmt.Sprintf("玩家 [%s] 抢答正确！(+10分)", currentPlayer.Name), true, true)
 					} else {
-						// 答错了！
 						currentPlayer.Score -= 5
-						// 告诉这个玩家他答错了（其他玩家继续）
 						wrongMsg := WsMessage{Type: "wrong_answer", Payload: map[string]interface{}{}}
 						msgBytes, _ := json.Marshal(wrongMsg)
 						currentPlayer.Conn.WriteMessage(websocket.TextMessage, msgBytes)
 
-						// 如果所有人都答错了，回合结束
 						if isAllAnswered(currentRoom) {
 							if currentRoom.NoSongCorrect {
-								// 有人正确识别了幽灵歌曲，不算全军覆没
-								endRound(currentRoom, "本轮幽灵歌曲，全员鉴定完毕！", true, false)
+								endRound(currentRoom, "本轮歌曲不在场上，所有玩家鉴定完毕！", true, false)
 							} else {
-								endRound(currentRoom, "全军覆没！无人答对。", !isSongOnBoard(currentRoom), false)
+								endRound(currentRoom, "本轮无人答对。", !isSongOnBoard(currentRoom), false)
 							}
 						}
 					}
@@ -946,26 +879,23 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				if currentRoom.RoundState == "playing" && !currentPlayer.HasAnswered {
 					currentPlayer.HasAnswered = true
 
-					// 判断场上是不是真的没有这首歌
 					songOnBoard := isSongOnBoard(currentRoom)
 
 					if !songOnBoard {
-						// 真的没有这首歌，判断正确！
-						currentPlayer.Score += 5 // 发现没有这首歌奖励 5 分
+						currentPlayer.Score += 5
 						currentRoom.NoSongCorrect = true
 
 						if isAllAnswered(currentRoom) {
-							endRound(currentRoom, "本轮幽灵歌曲，全员鉴定完毕！", true, false)
+							endRound(currentRoom, "本轮歌曲不在场上，所有玩家鉴定完毕！", true, false)
 						}
 					} else {
-						// 场上明明有这首歌，判断错误！
 						currentPlayer.Score -= 5
 						wrongMsg := WsMessage{Type: "wrong_answer", Payload: map[string]interface{}{}}
 						msgBytes, _ := json.Marshal(wrongMsg)
 						currentPlayer.Conn.WriteMessage(websocket.TextMessage, msgBytes)
 
 						if isAllAnswered(currentRoom) {
-							endRound(currentRoom, "全军覆没！这首歌其实在场上。", false, false)
+							endRound(currentRoom, "所有玩家选择错误，这首歌其实在场上。", false, false)
 						}
 					}
 				}
@@ -974,10 +904,6 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
-
-// ==========================================
-// 4. 辅助函数
-// ==========================================
 
 // 将消息广播给房间里的所有人
 func broadcastToRoom(room *Room, msg WsMessage) {
@@ -992,7 +918,6 @@ func broadcastToRoom(room *Room, msg WsMessage) {
 
 // 广播当前房间的玩家状态
 func broadcastRoomState(room *Room) {
-	// 把 map 转成 slice 方便前端渲染
 	var playerList []Player
 	room.Mutex.Lock()
 	for _, p := range room.Players {

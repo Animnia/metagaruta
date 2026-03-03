@@ -431,7 +431,7 @@ const leaveRoom = () => {
   <div v-if="currentView === 'home'" class="home-wrapper">
     <div class="login-box">
       <h1 class="game-title">Metagaruta Online</h1>
-      <p class="subtitle">在线歌曲抢答</p>
+      <p class="subtitle">オンライン競技かるた</p>
       
       <div class="form-group">
         <label>玩家名称</label>
@@ -447,10 +447,10 @@ const leaveRoom = () => {
         <label>游戏模式 (创建房间时生效)</label>
         <div class="mode-selector">
           <button class="mode-btn" :class="{ active: selectedGameMode === 'vocaloid' }" @click="selectedGameMode = 'vocaloid'">
-            🎵 Vocaloid
+            Vocaloid
           </button>
           <button class="mode-btn" :class="{ active: selectedGameMode === 'touhou' }" @click="selectedGameMode = 'touhou'">
-            🌸 东方 Project
+            东方 Project
           </button>
         </div>
       </div>
@@ -478,16 +478,24 @@ const leaveRoom = () => {
       <div class="modal-box">
         <h2>📬 联系开发者</h2>
         <p style="color:#8a857a; line-height:1.8; text-align:left;">
-          如果你有任何问题、建议或想法，欢迎通过以下方式联系：
+          有bug吗？有新的创意吗？欢迎通过以下方式联系：
         </p>
         <div class="contact-list">
           <div class="contact-item">
             <span class="contact-label">GitHub</span>
-            <a href="https://github.com/Animnia/metagaruta" target="_blank" rel="noopener" class="contact-value">Animnia/metagaruta</a>
+            <a href="https://github.com/Animnia" target="_blank" rel="noopener" class="contact-value">Animnia/metagaruta</a>
           </div>
           <div class="contact-item">
             <span class="contact-label">Email</span>
-            <span class="contact-value">animnia@metagaruta.com</span>
+            <span class="contact-value">2550838863@qq.com</span>
+          </div>
+          <div class="contact-item">
+            <span class="contact-label">QQ</span>
+            <span class="contact-value">2550838863</span>
+          </div>
+          <div class="contact-item">
+            <span class="contact-label">微信</span>
+            <span class="contact-value">a15164468161463</span>
           </div>
         </div>
         <button class="btn-primary" @click="showContact = false" style="width:100%; margin-top:15px;">关闭</button>
@@ -512,7 +520,7 @@ const leaveRoom = () => {
         <div class="sidebar-bottom">
           <button class="no-song-btn" :class="{ 'disabled': hasAnswered || gameState !== 'playing' }" @click="handleNoSongClick">没有这首歌</button>
           <div class="room-info">房间号: <strong>{{ inputRoomId }}</strong></div>
-          <div class="room-mode-tag" :class="roomGameMode">{{ roomGameMode === 'touhou' ? '🌸 东方' : '🎵 Vocaloid' }}</div>
+          <div class="room-mode-tag" :class="roomGameMode">{{ roomGameMode === 'touhou' ? '东方' : 'Vocaloid' }}</div>
         </div>
       </aside>
 
