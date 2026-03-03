@@ -483,7 +483,7 @@ const leaveRoom = () => {
         <div class="contact-list">
           <div class="contact-item">
             <span class="contact-label">GitHub</span>
-            <a href="https://github.com/Animnia" target="_blank" rel="noopener" class="contact-value">Animnia/metagaruta</a>
+            <a href="https://github.com/Animnia" target="_blank" rel="noopener" class="contact-value">Animnia</a>
           </div>
           <div class="contact-item">
             <span class="contact-label">Email</span>
