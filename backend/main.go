@@ -651,6 +651,16 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			}
 
 			globalMutex.Lock()
+			if len(rooms) >= 10 {
+				globalMutex.Unlock()
+				errMsg := WsMessage{
+					Type:    "error",
+					Payload: map[string]interface{}{"message": "当前房间数已达上限 (最多10个)，请稍后再试。"},
+				}
+				eBytes, _ := json.Marshal(errMsg)
+				conn.WriteMessage(websocket.TextMessage, eBytes)
+				continue
+			}
 			roomID := generateRoomID()
 			room := &Room{
 				ID:       roomID,
@@ -699,11 +709,11 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			}
 
 			room.Mutex.Lock()
-			if len(room.Players) >= 4 {
+			if len(room.Players) >= 8 {
 				room.Mutex.Unlock()
 				errMsg := WsMessage{
 					Type:    "error",
-					Payload: map[string]interface{}{"message": "房间人数已满 (最多4人)"},
+					Payload: map[string]interface{}{"message": "房间人数已满 (最多8人)"},
 				}
 				msgBytes, _ := json.Marshal(errMsg)
 				conn.WriteMessage(websocket.TextMessage, msgBytes)
