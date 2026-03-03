@@ -65,6 +65,7 @@ const hasAnswered = ref(false)
 const showRules = ref(false)
 const showSettings = ref(false)
 const displayMode = ref('original')
+const showCharacterName = ref(false) // touhou 模式：是否显示角色名称，默认不显示
 const roomGameMode = ref('vocaloid') // 当前房间的实际游戏模式 (从服务器获取)
 
 // 房主与准备状态
@@ -504,7 +505,7 @@ const leaveRoom = () => {
             <!-- Touhou 模式: 显示角色图片 -->
             <template v-if="roomGameMode === 'touhou'">
               <img :src="card.pictureUrl" class="card-picture" alt="" />
-              <span class="card-name-overlay">{{ card.characterName }}</span>
+              <span v-if="showCharacterName" class="card-name-overlay">{{ card.characterName }}</span>
             </template>
             <!-- Vocaloid 模式: 显示歌曲名称 -->
             <template v-else>
@@ -538,12 +539,21 @@ const leaveRoom = () => {
       <div v-if="showSettings" class="modal-overlay" @click.self="showSettings = false">
         <div class="modal-box">
           <h2>⚙️ 玩家设置</h2>
-          <div class="form-group">
+          <!-- Vocaloid 模式设置 -->
+          <div v-if="roomGameMode === 'vocaloid'" class="form-group">
             <label>歌牌显示语言：</label>
             <select v-model="displayMode" style="width:100%; padding:10px; border:2px solid #000; outline:none; font-size:1rem;">
               <option value="original">原文 (Original)</option>
               <option value="translation">译文 (Translation)</option>
             </select>
+          </div>
+          <!-- Touhou 模式设置 -->
+          <div v-if="roomGameMode === 'touhou'" class="form-group">
+            <label>歌牌显示人物名称：</label>
+            <div class="mode-selector">
+              <button class="mode-btn" :class="{ active: !showCharacterName }" @click="showCharacterName = false">不显示</button>
+              <button class="mode-btn" :class="{ active: showCharacterName }" @click="showCharacterName = true">显示</button>
+            </div>
           </div>
           <button class="btn-primary" @click="showSettings = false" style="width:100%; margin-top:15px;">关闭</button>
         </div>
