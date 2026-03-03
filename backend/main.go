@@ -196,6 +196,10 @@ func loadTouhouChars() {
 		fmt.Println("警告: 无法读取 touhou/data/data.json，请检查路径！", err)
 		return
 	}
+	// 去除 UTF-8 BOM (0xEF 0xBB 0xBF)，防止 json.Unmarshal 解析失败
+	if len(file) >= 3 && file[0] == 0xEF && file[1] == 0xBB && file[2] == 0xBF {
+		file = file[3:]
+	}
 	json.Unmarshal(file, &globalTouhouChars)
 	fmt.Printf("成功加载 %d 个东方角色到全局题库\n", len(globalTouhouChars))
 }
