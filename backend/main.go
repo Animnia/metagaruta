@@ -105,8 +105,8 @@ var (
 // ==========================================
 
 func main() {
-	loadSongs()        // 载入 vocaloid 题库
-	loadTouhouChars()  // 载入 touhou 题库
+	loadSongs()       // 载入 vocaloid 题库
+	loadTouhouChars() // 载入 touhou 题库
 	http.HandleFunc("/ws", handleConnections)
 	http.HandleFunc("/api/audio", handleAudioProxy)     // 音频接口
 	http.HandleFunc("/api/picture", handlePictureProxy) // touhou 角色图片接口
