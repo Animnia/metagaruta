@@ -64,6 +64,7 @@ const hasAnswered = ref(false)
 // 控制弹窗和设置的变量
 const showRules = ref(false)
 const showSettings = ref(false)
+const showContact = ref(false)
 const displayMode = ref('original')
 const showCharacterName = ref(false) // touhou 模式：是否显示角色名称，默认不显示
 const roomGameMode = ref('vocaloid') // 当前房间的实际游戏模式 (从服务器获取)
@@ -459,6 +460,39 @@ const leaveRoom = () => {
         <button class="btn-secondary" @click="createGame">创建房间</button>
       </div>
     </div>
+
+    <!-- 首页角落按钮 -->
+    <div class="home-footer-links">
+      <a class="footer-link" href="https://github.com/Animnia/metagaruta" target="_blank" rel="noopener" title="GitHub">
+        <svg viewBox="0 0 16 16" width="20" height="20" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+      <button class="footer-link" @click="showContact = true" title="联系开发者">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+        联系开发者
+      </button>
+    </div>
+
+    <!-- 联系开发者弹窗 -->
+    <div v-if="showContact" class="modal-overlay" @click.self="showContact = false">
+      <div class="modal-box">
+        <h2>📬 联系开发者</h2>
+        <p style="color:#7c7f9a; line-height:1.8; text-align:left;">
+          如果你有任何问题、建议或想法，欢迎通过以下方式联系：
+        </p>
+        <div class="contact-list">
+          <div class="contact-item">
+            <span class="contact-label">GitHub</span>
+            <a href="https://github.com/Animnia/metagaruta" target="_blank" rel="noopener" class="contact-value">Animnia/metagaruta</a>
+          </div>
+          <div class="contact-item">
+            <span class="contact-label">Email</span>
+            <span class="contact-value">animnia@metagaruta.com</span>
+          </div>
+        </div>
+        <button class="btn-primary" @click="showContact = false" style="width:100%; margin-top:15px;">关闭</button>
+      </div>
+    </div>
   </div>
 
   <div v-else class="game-wrapper">
@@ -501,7 +535,7 @@ const leaveRoom = () => {
         </header>
 
         <div class="karuta-board" :class="{ 'touhou-board': roomGameMode === 'touhou' }">
-          <div v-for="card in cards" :key="card.id" class="karuta-card" :class="{ 'card-hidden': card.isMatched, 'touhou-card': roomGameMode === 'touhou' }" @click="handleCardClick(card)">
+          <div v-for="card in cards" :key="card.id" class="karuta-card" :class="{ 'card-hidden': card.isMatched, 'touhou-card': roomGameMode === 'touhou', 'card-frozen': hasAnswered && gameState === 'playing' && !card.isMatched }" @click="handleCardClick(card)">
             <!-- Touhou 模式: 显示角色图片 -->
             <template v-if="roomGameMode === 'touhou'">
               <img :src="card.pictureUrl" class="card-picture" alt="" />
@@ -697,6 +731,46 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 }
 
 .btn-group { display: flex; flex-direction: column; gap: 15px; margin-top: 30px; }
+
+/* 首页角落链接 */
+.home-footer-links {
+  position: absolute; bottom: 24px; right: 28px;
+  display: flex; gap: 16px; z-index: 10;
+}
+.footer-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border-radius: 20px;
+  font-size: 0.85rem; font-weight: 600;
+  background: rgba(255,255,255,0.85); color: #7c7f9a;
+  border: 1px solid #d4d0e0; cursor: pointer;
+  text-decoration: none;
+  font-family: 'Zen Maru Gothic', sans-serif; letter-spacing: 0.5px;
+  transition: all 0.2s; backdrop-filter: blur(6px);
+}
+.footer-link:hover {
+  color: #0891b2; border-color: #0891b2;
+  background: rgba(255,255,255,0.95);
+  box-shadow: 0 2px 12px rgba(8,145,178,0.12);
+  transform: translateY(-1px);
+}
+.footer-link svg { flex-shrink: 0; }
+
+/* 联系开发者弹窗 */
+.contact-list { margin: 15px 0 5px; }
+.contact-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 12px; border-bottom: 1px dashed #e8e4f0;
+}
+.contact-item:last-child { border-bottom: none; }
+.contact-label {
+  font-weight: 700; color: #7c7f9a; font-size: 0.85rem;
+  letter-spacing: 1px; text-transform: uppercase;
+}
+.contact-value {
+  color: #0891b2; font-weight: 600; font-size: 0.95rem;
+  text-decoration: none;
+}
+.contact-value:hover { text-decoration: underline; }
 .btn-primary, .btn-secondary {
   padding: 12px; font-size: 1.05rem; font-weight: bold;
   border: 1px solid; cursor: pointer; transition: all 0.2s;
@@ -910,6 +984,15 @@ body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
   border-color: #e94560;
 }
 .karuta-card.card-hidden { visibility: hidden; }
+.karuta-card.card-frozen {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+  cursor: not-allowed;
+  pointer-events: none;
+  transform: none !important;
+  box-shadow: 0 1px 4px rgba(28,37,65,0.10) !important;
+  border-color: #b8b0cc !important;
+}
 .card-text {
   writing-mode: vertical-rl; text-orientation: upright;
   letter-spacing: 2px; font-size: clamp(0.9rem, 1.5vh, 1.2rem);
