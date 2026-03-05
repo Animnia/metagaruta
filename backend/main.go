@@ -350,8 +350,8 @@ func startRound(room *Room) {
 	startTime := rand.Intn(maxStart)
 
 	playDuration := targetSong.Duration - startTime
-	if playDuration > 90 {
-		playDuration = 90
+	if playDuration > 45 {
+		playDuration = 45
 	}
 
 	fmt.Printf("房间 [%s] 第 %d 局，播放时长: %d 秒\n", room.ID, room.CurrentRound, playDuration)
@@ -418,7 +418,7 @@ func startCountdownAndPlay(room *Room, roundNum int) {
 	room.TimerCancel = make(chan struct{})
 	go func(r *Room, roundNum int, cancelCh chan struct{}) {
 		select {
-		case <-time.After(90 * time.Second):
+		case <-time.After(45 * time.Second):
 			r.Mutex.Lock()
 			defer r.Mutex.Unlock()
 			if r.RoundState == "playing" && r.CurrentRound == roundNum {

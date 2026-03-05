@@ -573,7 +573,7 @@ const leaveRoom = () => {
           <p>2. 在 16 张歌牌中寻找对应的歌曲，最先点击正确的玩家得分(+10)。</p>
           <p>3. 如果点错将扣分(-5)且本局无法再进行操作。</p>
           <p>4. 歌曲可能不在场上！此时点击“没有这首歌”得分(+5)。</p>
-          <p>5. 每局至多播放音频90秒。</p>
+          <p>5. 每局至多播放音频45秒。</p>
           <button class="btn-primary" @click="showRules = false" style="width:100%; margin-top:15px;">明白</button>
         </div>
       </div>
