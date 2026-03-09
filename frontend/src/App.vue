@@ -162,8 +162,12 @@ const handleWsMessage = (event: MessageEvent) => {
         // 跳转到随机生成的裁切时间
         audioPlayer.value!.currentTime = startTime
         
-        // 举手告诉裁判：我缓冲完毕了！
-        socket?.send(JSON.stringify({ type: 'client_ready', payload: {} }))
+        // seek 完成后再告知服务端就绪（ogg 格式 seek 会触发重新缓冲）
+        audioPlayer.value!.onseeked = () => {
+          audioPlayer.value!.onseeked = null
+          // 举手告诉裁判：我缓冲完毕了！
+          socket?.send(JSON.stringify({ type: 'client_ready', payload: {} }))
+        }
       }
     }
   }
@@ -208,7 +212,17 @@ const handleWsMessage = (event: MessageEvent) => {
 
     if (audioPlayer.value) {
       audioPlayer.value.play().catch(e => {
-        chatLogs.value.push(`系统: 播放异常 (${e.name})`)
+        // play() 被 seek 引起的重缓冲中断时，等待就绪后重试一次
+        if (e.name === 'AbortError' && audioPlayer.value) {
+          audioPlayer.value.oncanplay = () => {
+            audioPlayer.value!.oncanplay = null
+            audioPlayer.value!.play().catch(e2 => {
+              chatLogs.value.push(`系统: 播放异常 (${e2.name})`)
+            })
+          }
+        } else {
+          chatLogs.value.push(`系统: 播放异常 (${e.name})`)
+        }
       })
     }
   }
