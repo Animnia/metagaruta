@@ -93,6 +93,7 @@ func main() {
 	http.HandleFunc("/ws", handleConnections)
 	http.HandleFunc("/api/audio", handleAudioProxy)
 	http.HandleFunc("/api/picture", handlePictureProxy)
+	http.HandleFunc("/api/admin/status", handleAdminStatus)
 	fmt.Println("---------------------------------------")
 	fmt.Println("歌牌游戏裁判服务器已启动 :3000/ws")
 	fmt.Println("---------------------------------------")
@@ -935,4 +936,114 @@ func broadcastRoomState(room *Room) {
 		},
 	}
 	broadcastToRoom(room, stateMsg)
+}
+
+// ==========================================
+// 管理状态查询接口 (GET /api/admin/status)
+// 仅允许本机访问
+// ==========================================
+
+func handleAdminStatus(w http.ResponseWriter, r *http.Request) {
+	ip := r.RemoteAddr
+	// 仅允许来自本机的请求
+	isLocal := false
+	for _, prefix := range []string{"127.0.0.1", "::1", "[::1]"} {
+		if len(ip) >= len(prefix) && ip[:len(prefix)] == prefix {
+			isLocal = true
+			break
+		}
+	}
+	if !isLocal {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	globalMutex.Lock()
+	roomList := make([]*Room, 0, len(rooms))
+	for _, room := range rooms {
+		roomList = append(roomList, room)
+	}
+	globalMutex.Unlock()
+
+	type PlayerInfo struct {
+		ID          string `json:"id"`
+		Name        string `json:"name"`
+		Score       int    `json:"score"`
+		HasAnswered bool   `json:"hasAnswered"`
+		GameReady   bool   `json:"gameReady"`
+	}
+	type RoomInfo struct {
+		ID           string       `json:"id"`
+		OwnerID      string       `json:"ownerId"`
+		GameMode     string       `json:"gameMode"`
+		State        string       `json:"state"`
+		RoundState   string       `json:"roundState"`
+		CurrentRound int          `json:"currentRound"`
+		PlayerCount  int          `json:"playerCount"`
+		Players      []PlayerInfo `json:"players"`
+		BoardCards   int          `json:"boardCardsTotal"`
+		MatchedCards int          `json:"matchedCards"`
+		SongPoolSize int          `json:"songPoolSize"`
+		CurrentSong  string       `json:"currentSong,omitempty"`
+	}
+	type StatusResponse struct {
+		Timestamp     string     `json:"timestamp"`
+		TotalRooms    int        `json:"totalRooms"`
+		TotalPlayers  int        `json:"totalPlayers"`
+		VocaloidSongs int        `json:"vocaloidSongs"`
+		TouhouChars   int        `json:"touhouChars"`
+		Rooms         []RoomInfo `json:"rooms"`
+	}
+
+	var status StatusResponse
+	status.Timestamp = time.Now().Format("2006-01-02 15:04:05")
+	status.VocaloidSongs = len(globalSongs)
+	status.TouhouChars = len(globalTouhouChars)
+	status.Rooms = make([]RoomInfo, 0)
+
+	totalPlayers := 0
+	for _, room := range roomList {
+		room.Mutex.Lock()
+		ri := RoomInfo{
+			ID:           room.ID,
+			OwnerID:      room.OwnerID,
+			GameMode:     room.GameMode,
+			State:        room.State,
+			RoundState:   room.RoundState,
+			CurrentRound: room.CurrentRound,
+			PlayerCount:  len(room.Players),
+			BoardCards:   len(room.BoardCards),
+			SongPoolSize: len(room.SongPool),
+			Players:      make([]PlayerInfo, 0),
+		}
+		matched := 0
+		for _, c := range room.BoardCards {
+			if c.IsMatched {
+				matched++
+			}
+		}
+		ri.MatchedCards = matched
+		if room.CurrentSong != nil {
+			ri.CurrentSong = room.CurrentSong.TitleOriginal
+		}
+		for _, p := range room.Players {
+			ri.Players = append(ri.Players, PlayerInfo{
+				ID:          p.ID,
+				Name:        p.Name,
+				Score:       p.Score,
+				HasAnswered: p.HasAnswered,
+				GameReady:   p.GameReady,
+			})
+		}
+		room.Mutex.Unlock()
+		totalPlayers += ri.PlayerCount
+		status.Rooms = append(status.Rooms, ri)
+	}
+
+	status.TotalRooms = len(roomList)
+	status.TotalPlayers = totalPlayers
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	json.NewEncoder(w).Encode(status)
 }

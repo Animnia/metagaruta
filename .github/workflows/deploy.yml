@@ -58,6 +58,7 @@ jobs:
         run: |
           go mod tidy
           go build -o server main.go
+          go build -o mgstatus ./cmd/mgstatus/
 
       - name: 上传后端文件到临时目录
         uses: appleboy/scp-action@v0.1.4
@@ -65,7 +66,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "backend/server"
+          source: "backend/server,backend/mgstatus"
           target: "/tmp"
           strip_components: 1         
 
@@ -85,9 +86,11 @@ jobs:
             # 把新编译的文件覆盖过去 (注意替换 your_username)
             # 这里的路径取决于你之前在服务器上把 Go 代码放在哪了
             sudo mv /tmp/server /home/${{ secrets.SERVER_USER }}/metagaruta/backend/server
+            sudo mv /tmp/mgstatus /home/${{ secrets.SERVER_USER }}/metagaruta/backend/mgstatus
             
             # 给执行权限
             sudo chmod +x /home/${{ secrets.SERVER_USER }}/metagaruta/backend/server
+            sudo chmod +x /home/${{ secrets.SERVER_USER }}/metagaruta/backend/mgstatus
             
             # 重启服务
             sudo systemctl start metagaruta
